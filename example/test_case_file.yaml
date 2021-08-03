@@ -1,0 +1,8 @@
+side_1:
+  ip: "127.0.0.1"
+  port: 9000
+side_2:
+  ip: "127.0.0.1"
+  port: 9000
+test_cases:
+  - "read_remote_success"

@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+message VersionRequest { }
+
+message VersionResponse{
+    string version = 1;
+}
+
+message OpenDeviceRequest {
+    string dev_name = 1;
+}
+
+message OpenDeviceResponce {
+    uint32 dev_id = 1;
+}
+
+message CreatePdRequest {
+    uint32 dev_id = 1;
+}
+
+message CreatePdResponse {
+    uint32 pd_id = 1;
+}
+
+message CreateMrRequest {
+    uint32 pd_id = 1;
+    uint64 flag = 2;
+    uint64 len = 3;
+}
+
+message CreateMrResponse {
+    uint64 addr = 1;
+    uint64 len = 2;
+    uint32 rkey = 3;
+}
+
+message CreateQpRequest {
+    uint32 pd_id = 1;
+    enum QpType {
+        RC = 0;
+        UC = 1;
+    }
+    QpType qp_type = 2;
+}
+
+message CreateQpResponse {
+    uint32 qp_num = 1;
+}
+
+message QueryPortRequest {
+    uint32 dev_id = 1;
+    uint32 ib_port_num = 2;
+}
+
+message QueryPortResponse {
+    uint32 lid = 1;
+}
+
+message QueryGidRequest {
+    uint32 dev_id = 1;
+    uint32 ib_port_num = 2;
+    uint32 gid_idx = 3;
+}
+
+message QueryGidResponse {
+    bytes gid_raw = 1;
+}
+
+message ConnectQpRequest {
+    uint32 dev_id = 1;
+    uint32 qp_num = 2;
+    uint64 access_flag = 3;
+    uint32 remote_qp_num = 4;
+    uint32 dlid = 5;
+    uint32 ib_port_num = 6;
+    uint32 gid_idx = 7;
+    optional uint32 timeout = 8;
+    optional uint32 retry = 9;
+    optional uint32 rnr_retry = 10;
+}
+
+message ConnectQpResponse {
+}

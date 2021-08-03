@@ -1,0 +1,12 @@
+syntax = "proto3";
+import "proto/message.proto";
+
+service Side {
+    rpc Version(VersionRequest) returns (VersionResponse) {}
+    rpc OpenDevice(OpenDeviceRequest) returns (OpenDeviceResponce) {}
+    rpc CreatePd(CreatePdRequest) returns (CreatePdResponse) {}
+    rpc CreateMr(CreateMrRequest) returns (CreateMrResponse) {}
+    rpc CreateQp(CreateQpRequest) returns (CreateQpResponse) {}
+    rpc QueryPort(QueryPortRequest) returns (QueryPortResponse) {}
+    rpc QueryGid(QueryGidRequest) returns (QueryGidResponse) {}
+}
