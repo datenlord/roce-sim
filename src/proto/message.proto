@@ -11,11 +11,11 @@ message OpenDeviceRequest {
 }
 
 message OpenDeviceResponce {
-    uint32 dev_id = 1;
+    string dev_name = 1;
 }
 
 message CreatePdRequest {
-    uint32 dev_id = 1;
+    string dev_name = 1;
 }
 
 message CreatePdResponse {
@@ -32,6 +32,17 @@ message CreateMrResponse {
     uint64 addr = 1;
     uint64 len = 2;
     uint32 rkey = 3;
+    uint32 lkey = 4;
+    uint32 mr_id = 5;
+}
+
+message CreateCqRequest {
+    string dev_name = 1;
+    uint32 cq_size = 2;
+}
+
+message CreateCqResponse {
+    uint32 cq_id = 1;
 }
 
 message CreateQpRequest {
@@ -41,14 +52,16 @@ message CreateQpRequest {
         UC = 1;
     }
     QpType qp_type = 2;
+    uint32 cq_id = 3;
 }
 
 message CreateQpResponse {
-    uint32 qp_num = 1;
+    uint32 qp_id = 1;
+    uint32 qp_num = 2;
 }
 
 message QueryPortRequest {
-    uint32 dev_id = 1;
+    string dev_name = 1;
     uint32 ib_port_num = 2;
 }
 
@@ -57,7 +70,7 @@ message QueryPortResponse {
 }
 
 message QueryGidRequest {
-    uint32 dev_id = 1;
+    string dev_name = 1;
     uint32 ib_port_num = 2;
     uint32 gid_idx = 3;
 }
@@ -67,17 +80,54 @@ message QueryGidResponse {
 }
 
 message ConnectQpRequest {
-    uint32 dev_id = 1;
-    uint32 qp_num = 2;
-    uint64 access_flag = 3;
-    uint32 remote_qp_num = 4;
-    uint32 dlid = 5;
-    uint32 ib_port_num = 6;
-    uint32 gid_idx = 7;
-    optional uint32 timeout = 8;
-    optional uint32 retry = 9;
-    optional uint32 rnr_retry = 10;
+    string dev_name = 1;
+    uint32 qp_id = 2;
+    uint64 access_flag = 4;
+
+    uint32 gid_idx = 8;
+    uint32 ib_port_num = 7;
+    uint32 remote_qp_num = 3;
+    uint32 remote_lid = 5;
+    bytes remote_gid = 6;
+
+    uint32 timeout = 9;
+    uint32 retry = 10;
+    uint32 rnr_retry = 11;
 }
 
 message ConnectQpResponse {
+}
+
+message RemoteReadRequest {
+    uint64 addr = 1;
+    uint32 len = 2;
+    uint32 lkey = 3;
+    uint64 remote_addr = 4;
+    uint32 remote_key = 5;
+    uint32 qp_id = 6;
+    uint32 cq_id = 7;
+}
+
+message RemoteReadResponse {
+}
+
+message LocalWriteRequest {
+    uint32 mr_id = 1;
+    uint32 offset = 2;
+    uint32 len = 3;
+    bytes content = 4;
+}
+
+message LocalWriteResponse {
+}
+
+message LocalCheckMemRequest {
+    uint32 mr_id = 1;
+    uint32 offset = 2;
+    uint32 len = 3;
+    bytes expected = 4;
+}
+
+message LocalCheckMemResponse {
+    bool same = 1;
 }
