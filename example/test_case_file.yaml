@@ -1,8 +1,14 @@
 side_1:
   ip: "127.0.0.1"
   port: 9000
+  dev_name: ""
+  ib_port: 1
+  gid_idx: 1
 side_2:
   ip: "127.0.0.1"
-  port: 9000
+  port: 9001
+  dev_name: ""
+  ib_port: 1
+  gid_idx: 1
 test_cases:
   - "read_remote_success"

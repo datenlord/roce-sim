@@ -7,6 +7,11 @@ service Side {
     rpc CreatePd(CreatePdRequest) returns (CreatePdResponse) {}
     rpc CreateMr(CreateMrRequest) returns (CreateMrResponse) {}
     rpc CreateQp(CreateQpRequest) returns (CreateQpResponse) {}
+    rpc CreateCq(CreateCqRequest) returns (CreateCqResponse) {}
     rpc QueryPort(QueryPortRequest) returns (QueryPortResponse) {}
     rpc QueryGid(QueryGidRequest) returns (QueryGidResponse) {}
+    rpc ConnectQp(ConnectQpRequest) returns (ConnectQpResponse) {}
+    rpc RemoteRead(RemoteReadRequest) returns (RemoteReadResponse) {}
+    rpc LocalWrite(LocalWriteRequest) returns (LocalWriteResponse) {}
+    rpc LocalCheckMem(LocalCheckMemRequest) returns (LocalCheckMemResponse) {}
 }

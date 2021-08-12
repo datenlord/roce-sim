@@ -75,7 +75,7 @@ struct CmConData {
 
 impl CmConData {
     ///
-    fn new() ->anyhow::Result<Self> {
+    fn new() -> anyhow::Result<Self> {
         let s = Self {
             addr: u64::from_str_radix("55b4dec4d610", 16)?,
             rkey: u32::from_str_radix("245", 16)?,
@@ -215,12 +215,15 @@ impl TcpSock {
 
 fn main() -> anyhow::Result<()> {
     let handler = std::thread::spawn(move || {
-        let socket = UdpSocket::bind("0.0.0.0:4791").unwrap_or_else(|err| panic!("failed to bind, the error is:{}", err));
+        let socket = UdpSocket::bind("0.0.0.0:4791")
+            .unwrap_or_else(|err| panic!("failed to bind, the error is:{}", err));
         let mut buf = [0; 64];
         loop {
             // Receives a single datagram message on the socket. If `buf` is too small to hold
             // the message, it will be cut off.
-            let (amt, src) = socket.recv_from(&mut buf).unwrap_or_else(|err| panic!("failed to recv_from, the error is:{}", err));
+            let (amt, src) = socket
+                .recv_from(&mut buf)
+                .unwrap_or_else(|err| panic!("failed to recv_from, the error is:{}", err));
             println!("received {} bytes data from {}", amt, src);
 
             // Redeclare `buf` as slice of the received data and send reverse data back to origin.
@@ -234,7 +237,7 @@ fn main() -> anyhow::Result<()> {
     let sock_port = 9527;
     let client_sock = TcpSock::connect(server_name, sock_port);
     let local_con_data = CmConData::new()?;
-    
+
     println!("local connection data: {}", local_con_data);
     let local_con_data_be = local_con_data.into_be();
     let remote_con_data_be: CmConData = client_sock.exchange_data(&local_con_data_be);
