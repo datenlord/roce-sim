@@ -6,7 +6,7 @@ from scapy.all import *
 #from scapy.contrib.roce import BTH, AETH, opcode
 from roce import AETH, AtomicAckETH, AtomicETH, BTH, ImmDt, RETH, opcode
 
-MTU = 256
+PMTU = 256
 MSG_SIZE = 720
 
 DST_IP = '192.168.122.190'
@@ -71,9 +71,9 @@ exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 print(struct.unpack('<iq', exch_data))
 
 # RoCE send and ack
-send_req_pkt_num = math.ceil(send_size / MTU)
+send_req_pkt_num = math.ceil(send_size / PMTU)
 src_npsn = src_cpsn + send_req_pkt_num
-if send_size <= MTU: 
+if send_size <= PMTU: 
     send_bth = BTH(
         opcode = opcode('RC', 'SEND_ONLY')[0],
         psn = src_cpsn,
@@ -91,7 +91,7 @@ else:
         dqpn = dst_qpn,
         ackreq = False,
     )
-    send_data = struct.pack(f'<{MTU}s', bytearray(send_str, 'ascii'))
+    send_data = struct.pack(f'<{PMTU}s', bytearray(send_str, 'ascii'))
     send_req = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/send_bth/Raw(load=send_data)
     send_req.show()
     send(send_req)
@@ -104,12 +104,12 @@ else:
             dqpn = dst_qpn,
             ackreq = False,
         )
-        send_data = struct.pack(f'<{MTU}s', bytearray(send_str, 'ascii'))
+        send_data = struct.pack(f'<{PMTU}s', bytearray(send_str, 'ascii'))
         send_req = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/send_bth/Raw(load=send_data)
         send_req.show()
         send(send_req)
 
-    last_send_size = send_size % MTU
+    last_send_size = send_size % PMTU
     send_bth = BTH(
         opcode = opcode('RC', 'SEND_LAST')[0],
         psn = src_cpsn + send_req_mid_pkt_num + 1,
@@ -146,9 +146,9 @@ read_req = BTH(roce_bytes)
 read_req.show()
 assert read_req[BTH].psn == src_epsn, 'expected PSN not match'
 read_size = read_req[RETH].dlen
-read_resp_pkt_num = math.ceil(read_size / MTU)
+read_resp_pkt_num = math.ceil(read_size / PMTU)
 read_aeth = AETH(code='ACK', value=31, msn=1)
-if read_size <= MTU:
+if read_size <= PMTU:
     read_resp_bth = BTH(
         opcode = opcode('RC', 'RDMA_READ_RESPONSE_ONLY')[0],
         psn = read_req[BTH].psn,
@@ -164,7 +164,7 @@ else:
         psn = src_epsn,
         dqpn = dst_qpn,
     )
-    read_data = struct.pack(f'<{MTU}s', bytearray(read_str, 'ascii'))
+    read_data = struct.pack(f'<{PMTU}s', bytearray(read_str, 'ascii'))
     read_resp = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/read_resp_bth/read_aeth/Raw(load=read_data)
     read_resp.show()
     send(read_resp)
@@ -176,14 +176,14 @@ else:
             psn = src_epsn + i + 1,
             dqpn = dst_qpn,
         )
-        read_data = struct.pack(f'<{MTU}s', bytearray(read_str, 'ascii'))
+        read_data = struct.pack(f'<{PMTU}s', bytearray(read_str, 'ascii'))
         mid_read_data_len = len(read_data)
         print(f'mid read data len={mid_read_data_len}')
         read_resp = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/read_resp_bth/Raw(load=read_data)
         read_resp.show()
         send(read_resp)
 
-    last_read_size = read_size % MTU
+    last_read_size = read_size % PMTU
     read_resp_bth = BTH(
         opcode = opcode('RC', 'RDMA_READ_RESPONSE_LAST')[0],
         psn = src_epsn + read_resp_mid_pkt_num + 1,
@@ -203,7 +203,7 @@ _, write_size = parsed_fields
 print(parsed_fields)
 
 # RoCE write and ack
-write_req_pkt_num = math.ceil(write_size / MTU)
+write_req_pkt_num = math.ceil(write_size / PMTU)
 print(f'write request packet num={write_req_pkt_num}')
 for i in range(write_req_pkt_num):
     roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
