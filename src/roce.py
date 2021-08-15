@@ -26,6 +26,8 @@ _transports = {
     'UC': 0x20,
     'RD': 0x40,
     'UD': 0x60,
+    'CNP': 0x80,
+    'XRC': 0xA0,
 }
 
 _ops = {
@@ -50,6 +52,9 @@ _ops = {
     'ATOMIC_ACKNOWLEDGE': 0x12,
     'COMPARE_SWAP': 0x13,
     'FETCH_ADD': 0x14,
+    'RESYNC': 0x15,
+    'SEND_LAST_WITH_INVALIDATE': 0x16,
+    'SEND_ONLY_WITH_INVALIDATE': 0x17,
 }
 
 
@@ -83,6 +88,8 @@ _bth_opcodes = dict([
     opcode('RC', 'ATOMIC_ACKNOWLEDGE'),
     opcode('RC', 'COMPARE_SWAP'),
     opcode('RC', 'FETCH_ADD'),
+    opcode('RC', 'SEND_LAST_WITH_INVALIDATE'),
+    opcode('RC', 'SEND_ONLY_WITH_INVALIDATE'),
 
     opcode('UC', 'SEND_FIRST'),
     opcode('UC', 'SEND_MIDDLE'),
@@ -118,9 +125,34 @@ _bth_opcodes = dict([
     opcode('RD', 'ATOMIC_ACKNOWLEDGE'),
     opcode('RD', 'COMPARE_SWAP'),
     opcode('RD', 'FETCH_ADD'),
+    opcode('RD', 'RESYNC'),
 
     opcode('UD', 'SEND_ONLY'),
     opcode('UD', 'SEND_ONLY_WITH_IMMEDIATE'),
+
+    opcode('XRC', 'SEND_FIRST'),
+    opcode('XRC', 'SEND_MIDDLE'),
+    opcode('XRC', 'SEND_LAST'),
+    opcode('XRC', 'SEND_LAST_WITH_IMMEDIATE'),
+    opcode('XRC', 'SEND_ONLY'),
+    opcode('XRC', 'SEND_ONLY_WITH_IMMEDIATE'),
+    opcode('XRC', 'RDMA_WRITE_FIRST'),
+    opcode('XRC', 'RDMA_WRITE_MIDDLE'),
+    opcode('XRC', 'RDMA_WRITE_LAST'),
+    opcode('XRC', 'RDMA_WRITE_LAST_WITH_IMMEDIATE'),
+    opcode('XRC', 'RDMA_WRITE_ONLY'),
+    opcode('XRC', 'RDMA_WRITE_ONLY_WITH_IMMEDIATE'),
+    opcode('XRC', 'RDMA_READ_REQUEST'),
+    opcode('XRC', 'RDMA_READ_RESPONSE_FIRST'),
+    opcode('XRC', 'RDMA_READ_RESPONSE_MIDDLE'),
+    opcode('XRC', 'RDMA_READ_RESPONSE_LAST'),
+    opcode('XRC', 'RDMA_READ_RESPONSE_ONLY'),
+    opcode('XRC', 'ACKNOWLEDGE'),
+    opcode('XRC', 'ATOMIC_ACKNOWLEDGE'),
+    opcode('XRC', 'COMPARE_SWAP'),
+    opcode('XRC', 'FETCH_ADD'),
+    opcode('XRC', 'SEND_LAST_WITH_INVALIDATE'),
+    opcode('XRC', 'SEND_ONLY_WITH_INVALIDATE'),
 
     (CNP_OPCODE, 'CNP'),
 ])
@@ -255,18 +287,46 @@ class AtomicAckETH(Packet):
 class ImmDt(Packet):
     name = "ImmDt"
     fields_desc = [
-        XIntField("data", 0)
+        XIntField("data", 0),
+    ]
+
+class IETH(Packet):
+    name = "IETH"
+    fields_desc = [
+        XIntField("rkey", 0),
+    ]
+
+class RETHImmDt(Packet):
+    name = "RETHImmdt"
+    fields_desc = [
+        XLongField("va", 0),
+        XIntField("rkey", 0),
+        XIntField("dlen", 0),
+        XIntField("data", 0),
     ]
 
 bind_layers(BTH, CNPPadding, opcode=CNP_OPCODE)
 
 bind_layers(Ether, GRH, type=0x8915)
 bind_layers(GRH, BTH)
-bind_layers(BTH, AtomicETH, opcode=opcode('RC', 'COMPARE_SWAP'))
-bind_layers(BTH, AtomicETH, opcode=opcode('RC', 'FETCH_ADD'))
+
+bind_layers(AETH, AtomicAckETH, opcode=opcode('RC', 'ATOMIC_ACKNOWLEDGE')[0])
 bind_layers(BTH, AETH, opcode=opcode('RC', 'ACKNOWLEDGE')[0])
-bind_layers(BTH, AETH, opcode=opcode('RD', 'ACKNOWLEDGE')[0])
-bind_layers(BTH, RETH)
+bind_layers(BTH, AETH, opcode=opcode('RC', 'ATOMIC_ACKNOWLEDGE')[0])
+bind_layers(BTH, AETH, opcode=opcode('RC', 'RDMA_READ_RESPONSE_FIRST')[0])
+bind_layers(BTH, AETH, opcode=opcode('RC', 'RDMA_READ_RESPONSE_LAST')[0])
+bind_layers(BTH, AETH, opcode=opcode('RC', 'RDMA_READ_RESPONSE_ONLY')[0])
+bind_layers(BTH, AtomicETH, opcode=opcode('RC', 'COMPARE_SWAP')[0])
+bind_layers(BTH, AtomicETH, opcode=opcode('RC', 'FETCH_ADD')[0])
+bind_layers(BTH, IETH, opcode=opcode('RC', 'SEND_LAST_WITH_INVALIDATE')[0])
+bind_layers(BTH, IETH, opcode=opcode('RC', 'SEND_ONLY_WITH_INVALIDATE')[0])
+bind_layers(BTH, ImmDt, opcode=opcode('RC', 'SEND_LAST_WITH_IMMEDIATE')[0])
+bind_layers(BTH, ImmDt, opcode=opcode('RC', 'SEND_ONLY_WITH_IMMEDIATE')[0])
+bind_layers(BTH, ImmDt, opcode=opcode('RC', 'RDMA_WRITE_LAST_WITH_IMMEDIATE')[0])
+bind_layers(BTH, RETH, opcode=opcode('RC', 'RDMA_READ_REQUEST')[0])
+bind_layers(BTH, RETH, opcode=opcode('RC', 'RDMA_WRITE_FIRST')[0])
+bind_layers(BTH, RETH, opcode=opcode('RC', 'RDMA_WRITE_ONLY')[0])
+#bind_layers(BTH, RETH, opcode=opcode('RC', 'RDMA_WRITE_ONLY_WITH_IMMEDIATE')[0])
+bind_layers(BTH, RETHImmDt, opcode=opcode('RC', 'RDMA_WRITE_ONLY_WITH_IMMEDIATE')[0])
 bind_layers(UDP, BTH, dport=4791)
 bind_layers(UDP, BTH, sport=4791)
-

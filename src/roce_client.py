@@ -7,7 +7,7 @@ from scapy.all import *
 #from scapy.contrib.roce import BTH, AETH, opcode
 from roce import AETH, AtomicAckETH, AtomicETH, BTH, ImmDt, RETH, opcode
 
-MTU = 256
+PMTU = 256
 MSG_SIZE = 720
 
 DST_IP = '192.168.122.190'
@@ -74,7 +74,7 @@ print(f'send_size={send_size}')
 print(parsed_fields)
 
 # RoCE send and ack
-send_pkt_num = math.ceil(send_size / MTU)
+send_pkt_num = math.ceil(send_size / PMTU)
 #roce_pkts = sniff(filter=f'udp port {ROCE_PORT}', count=send_pkt_num)
 #send_req = roce_pkts[0]
 roce_pkts = []
@@ -102,7 +102,7 @@ _, read_size = parsed_fields
 print(parsed_fields)
 
 # RoCE read and ack
-read_resp_pkt_num = math.ceil(read_size / MTU)
+read_resp_pkt_num = math.ceil(read_size / PMTU)
 read_bth = BTH(
     opcode = opcode('RC', 'RDMA_READ_REQUEST')[0],
     psn = src_cpsn,
@@ -136,7 +136,7 @@ print(parsed_fields)
 
 # RoCE write and ack
 write_reth = RETH(va=dst_va, rkey=dst_rkey, dlen=write_size)
-if write_size <= MTU:
+if write_size <= PMTU:
     write_bth = BTH(
         opcode = opcode('RC', 'RDMA_WRITE_ONLY')[0],
         psn = src_cpsn,
@@ -149,14 +149,14 @@ if write_size <= MTU:
     send(write_req)
     src_npsn = src_cpsn + 1
 else:
-    write_req_pkt_num = math.ceil(write_size / MTU)
+    write_req_pkt_num = math.ceil(write_size / PMTU)
     write_bth = BTH(
         opcode = opcode('RC', 'RDMA_WRITE_FIRST')[0],
         psn = src_cpsn,
         dqpn = dst_qpn,
         ackreq = False,
     )
-    write_data = struct.pack(f'<{MTU}s', bytearray(write_str, 'ascii'))
+    write_data = struct.pack(f'<{PMTU}s', bytearray(write_str, 'ascii'))
     write_req = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_bth/write_reth/Raw(load=write_data)
     write_req.show()
     send(write_req)
@@ -169,12 +169,12 @@ else:
             dqpn = dst_qpn,
             ackreq = False,
         )
-        write_data = struct.pack(f'<{MTU}s', bytearray(write_str, 'ascii'))
+        write_data = struct.pack(f'<{PMTU}s', bytearray(write_str, 'ascii'))
         write_req = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_bth/Raw(load=write_data)
         write_req.show()
         send(write_req)
 
-    last_write_size = write_size % MTU
+    last_write_size = write_size % PMTU
     write_bth = BTH(
         opcode = opcode('RC', 'RDMA_WRITE_LAST')[0],
         psn = src_cpsn + write_req_mid_pkt_num + 1,
