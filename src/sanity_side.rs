@@ -34,7 +34,7 @@ fn main() -> anyhow::Result<()> {
     let args: Vec<String> = env::args().collect();
     let mut server = ServerBuilder::new(env)
         .register_service(service)
-        .bind("127.0.0.1", args[1].parse().unwrap())
+        .bind("0.0.0.0", args[1].parse().unwrap())
         .channel_args(ch_builder.build_args())
         .build()
         .unwrap();

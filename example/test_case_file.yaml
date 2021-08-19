@@ -1,12 +1,14 @@
-side_1:
-  ip: "127.0.0.1"
+side_2:
+  # Python Side
+  ip: "192.168.122.113"
   port: 9000
   dev_name: ""
   ib_port: 1
   gid_idx: 1
-side_2:
-  ip: "127.0.0.1"
-  port: 9001
+side_1:
+  # Rust Side
+  ip: "192.168.122.127"
+  port: 9000
   dev_name: ""
   ib_port: 1
   gid_idx: 1
