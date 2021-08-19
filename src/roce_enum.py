@@ -76,6 +76,26 @@ class WC_STATUS(IntEnum):
     TM_ERR = 22
     TM_RNDV_INCOMPLETE = 23
 
+    def from_nak(nak_val):
+        # Nak value
+        # 00000 PSN Sequence Error
+        # 00001 Invalid Request
+        # 00010 Remote Access Error
+        # 00011 Remote Operational Error
+        # 00100 Invalid RD Request
+        # 00101 - 11111 reserved
+
+        if nak_val == 1:
+            return WC_STATUS.REM_INV_REQ_ERR
+        elif nak_val == 2:
+            return WC_STATUS.REM_ACCESS_ERR
+        elif nak_val == 3:
+            return WC_STATUS.REM_OP_ERR
+        elif nak_val == 4:
+            return WC_STATUS.REM_INV_RD_REQ_ERR
+        else:
+            raise Exception('unsupported NAK value for WC_STATUS')
+
 class WC_FLAGS(IntFlag):
     GRH = 1
     WITH_IMM = 2
@@ -102,6 +122,41 @@ class WC_OPCODE(IntEnum):
     TM_RECV = 133
     TM_NO_TAG = 134
     DRIVER1 = 135
+
+    def from_wr_op(wr_op):
+        if wr_op in [WR_OPCODE.RDMA_WRITE, WR_OPCODE.RDMA_WRITE_WITH_IMM]:
+            return WC_OPCODE.RDMA_WRITE
+        elif wr_op in [WR_OPCODE.SEND, WR_OPCODE.SEND_WITH_IMM, WR_OPCODE.SEND_WITH_INV]:
+            return WC_OPCODE.SEND
+        elif wr_op == WR_OPCODE.RDMA_READ:
+            return WC_OPCODE.RDMA_READ
+        elif wr_op == WR_OPCODE.ATOMIC_CMP_AND_SWP:
+            return WC_OPCODE.COMP_SWAP
+        elif wr_op == WR_OPCODE.ATOMIC_FETCH_AND_ADD:
+            return WC_OPCODE.FETCH_ADD
+        elif wr_op == WR_OPCODE.LOCAL_INV:
+            return WC_OPCODE.LOCAL_INV
+        elif wr_op == WR_OPCODE.BIND_MW:
+            return WC_OPCODE.BIND_MW
+        elif wr_op == WR_OPCODE.TSO:
+            return WC_OPCODE.TSO
+        elif wr_op == WR_OPCODE.DRIVER1:
+            return WC_OPCODE.DRIVER1
+        else:
+            raise Exception(f'WR_OPCODE={wr_op} has no WC_OPCODE')
+
+    def from_rc_op(rc_op):
+        if RC.send_last(rc_op) or RC.send_only(rc_op):
+            return WC_OPCODE.SEND
+        elif RC.write_last(rc_op) or RC.write_only(rc_op):
+            if RC.has_imm(rc_op):
+                return WC_OPCODE.RECV_RDMA_WITH_IMM
+            else:
+                return WC_OPCODE.RDMA_WRITE
+        elif rc_op == RC.RDMA_READ_RESPONSE_LAST or rc_op == RC.RDMA_READ_RESPONSE_ONLY:
+            return WC_OPCODE.RDMA_READ
+        else:
+            raise Exception(f'RC opcode={rc_op} has no WC_OPCODE')
 
 class ACCESS_FLAGS(IntFlag):
     LOCAL_WRITE = 1
@@ -240,16 +295,6 @@ class RC(IntEnum):
             RC.ACKNOWLEDGE,
             RC.ATOMIC_ACKNOWLEDGE,
         ] or RC.read_resp(op)
-
-    def wc_op(op):
-        if RC.send_last(op) or RC.send_only(op):
-            return WC_OPCODE.SEND
-        elif RC.write_last(op) or RC.write_only(op):
-            return WC_OPCODE.RDMA_WRITE
-        elif op == RC.RDMA_READ_RESPONSE_LAST or op == RC.RDMA_READ_RESPONSE_ONLY:
-            return WC_OPCODE.RDMA_READ
-        else:
-            raise Exception(f'opcode={op} has no WC_OPCODE')
 
     def has_imm(op):
         return op in [

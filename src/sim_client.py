@@ -113,7 +113,7 @@ cqe = qp.poll_cq()
 assert cqe is not None, 'cqe should exist'
 assert cqe.local_qpn() == qp.qpn()
 assert cqe.sqpn() == dst_qpn
-assert cqe.len() == mr.write_and_append_size()
+# assert cqe.len() == mr.write_and_append_size()
 assert cqe.op() == WC_OPCODE.SEND
 assert cqe.status() == WC_STATUS.SUCCESS
 
@@ -131,7 +131,6 @@ sr = SendWR(
    sgl = sg,
    rmt_va = dst_va,
    rkey = dst_rkey,
-   #send_flags = SEND_FLAGS.SIGNALED,
 )
 qp.post_send(sr)
 read_resp_pkt_num = math.ceil(read_size / roce.mtu())
@@ -141,8 +140,8 @@ cqe = qp.poll_cq()
 assert cqe is not None, 'cqe should exist'
 assert cqe.local_qpn() == qp.qpn()
 assert cqe.sqpn() == dst_qpn
-print(f'cqe.len()={cqe.len()} != sg.len()={sg.len()}, read_size={read_size}')
-#assert cqe.len() == sg.len()
+#print(f'cqe.len()={cqe.len()} != sg.len()={sg.len()}, read_size={read_size}')
+assert cqe.len() == read_size
 assert cqe.op() == WC_OPCODE.RDMA_READ
 assert cqe.status() == WC_STATUS.SUCCESS
 
@@ -187,7 +186,7 @@ assert cqe is not None, 'cqe should exist'
 assert cqe.local_qpn() == qp.qpn()
 assert cqe.sqpn() == dst_qpn
 assert cqe.len() == 0
-assert cqe.op() == WC_OPCODE.RDMA_WRITE
+assert cqe.op() == WC_OPCODE.RECV_RDMA_WITH_IMM
 assert cqe.status() == WC_STATUS.SUCCESS
 assert cqe.imm_data_or_inv_rkey() is not None
 
@@ -198,14 +197,14 @@ parsed_fields = struct.unpack('<i', exch_data)
 print(parsed_fields)
 
 # Exchange atomic ready
-mr.write(b'\x01\x00\x00\x00\x00\x00\x00\x00', pos = 8)
+mr.write(b'\x01\x00\x00\x00\x00\x00\x00\x00', addr = 8)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack('<i', AtomicReady), peer_addr)
 print(struct.unpack('<i', exch_data))
 
 # RoCE atomic and ack
 roce.recv_pkts(1)
-print(mr.read_all()[0:24])
+print(mr.read(addr = 0, size = 24))
 
 # Exchange atomic done
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
