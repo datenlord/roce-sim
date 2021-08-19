@@ -1286,6 +1286,7 @@ class SQ:
         # TODO: handle locally detected error: Local Memory Protection Error / Requester Class B
         assert Util.check_op_with_access_flags(rc_op, self.access_flags), 'received packet has opcode without proper permission'
 
+        padding = read_resp[BTH].padcount
         read_resp_psn = read_resp[BTH].psn
         read_wr_ssn, orig_read_req_psn = self.read_resp_psn_wr_ssn_dict[read_resp_psn]
         read_wr = self.get_outstanding_wr(read_wr_ssn)
@@ -1305,7 +1306,7 @@ class SQ:
 
         if rc_op == RC.RDMA_READ_RESPONSE_LAST or rc_op == RC.RDMA_READ_RESPONSE_ONLY:
             # TODO: handle locally detected error: Length error / Requester Class B
-            assert read_offset == read_dlen, 'read response data size not match DMA length'
+            assert (read_offset - padding) == read_dlen, 'read response data size not match DMA length'
 
             # Generate CQE for read response
             read_cqe = CQE(
