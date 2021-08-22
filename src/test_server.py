@@ -1,6 +1,7 @@
+import argparse
+import logging
 import socket
 import struct
-import logging
 from roce_enum import *
 from roce_v2 import *
 
@@ -14,7 +15,7 @@ S_VA = '000056482bb76120'
 # S_RKEY = '00000208'
 #S_QPN = '00000011'
 S_LID = '0000'
-S_GID = '00000000000000000000ffffc0a87aee'
+#S_GID = '00000000000000000000ffffc0a87aee'
 
 ReceiveReady = 0
 SendImm = 1
@@ -26,6 +27,10 @@ WriteSize = 6
 WriteDone = 7
 AtomicReady = 8
 AtomicDone = 9
+
+parser = argparse.ArgumentParser(description='Input server IP')
+parser.add_argument('-s', action='store', dest='src_ip')
+arg_res = parser.parse_args()
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -63,7 +68,8 @@ udp_sock.sendto(struct.pack('c', b'2'), peer_addr)
 src_va = '{:016x}'.format(POS_IN_MR)
 src_rkey = '{:08x}'.format(mr.rkey())
 src_qpn = '{:08x}'.format(qp.qpn())
-server_metadata = src_va + src_rkey + src_qpn + S_LID + S_GID
+src_gid = '{0:0>32}'.format('ffff' + socket.inet_aton(arg_res.src_ip).hex())
+server_metadata = src_va + src_rkey + src_qpn + S_LID + src_gid
 udp_sock.sendto(bytes.fromhex(server_metadata), peer_addr)
 # Recive metadata
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
