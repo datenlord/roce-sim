@@ -1,10 +1,10 @@
+import argparse
 import math
 import socket
 import struct
 
 from multiprocessing import Process
 from scapy.all import *
-#from scapy.contrib.roce import BTH, AETH, opcode
 from roce import AETH, AtomicAckETH, AtomicETH, BTH, ImmDt, RETH, opcode
 
 POS_IN_MR = 8
@@ -12,7 +12,7 @@ MR_SIZE = 1024
 PMTU = 256
 MSG_SIZE = MR_SIZE - POS_IN_MR
 
-DST_IP = '192.168.122.238'
+#DST_IP = '192.168.122.238'
 ROCE_PORT = 4791
 DST_PORT = 9527
 SRC_PORT = 6543
@@ -22,7 +22,7 @@ S_VA = '0000556acaa2ea50'
 S_RKEY = 208
 S_QPN = 17
 S_LID = '0000'
-S_GID = '00000000000000000000ffffc0a87abe'
+#S_GID = '00000000000000000000ffffc0a87abe'
 
 ReceiveReady = 0
 SendImm = 1
@@ -39,6 +39,11 @@ src_cpsn = 0
 src_npsn = 0
 src_epsn = 0
 
+parser = argparse.ArgumentParser(description='Input server IP and client IP')
+parser.add_argument('-s', action='store', dest='src_ip')
+parser.add_argument('-d', action='store', dest='dst_ip')
+arg_res = parser.parse_args()
+
 # RoCE socket
 roce_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 roce_bind_addr = ('0.0.0.0', ROCE_PORT)
@@ -48,7 +53,7 @@ roce_sock.bind(roce_bind_addr)
 udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 client_bind_addr = ('0.0.0.0', SRC_PORT)
 udp_sock.bind(client_bind_addr)
-srv_addr = (DST_IP, DST_PORT)
+srv_addr = (arg_res.dst_ip, DST_PORT)
 udp_sock.sendto(struct.pack('c', b'1'), srv_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 print(struct.unpack('<c', exch_data))
@@ -62,7 +67,8 @@ print(parsed_fields)
 src_va = '{:016x}'.format(POS_IN_MR)
 src_rkey = '{:08x}'.format(S_RKEY)
 src_qpn = '{:08x}'.format(S_QPN)
-client_metadata = src_va + src_rkey + src_qpn + S_LID + S_GID
+src_gid = '{0:0>32}'.format('ffff' + socket.inet_aton(arg_res.src_ip).hex())
+client_metadata = src_va + src_rkey + src_qpn + S_LID + src_gid
 udp_sock.sendto(bytes.fromhex(client_metadata), peer_addr)
 
 # Exchange receive ready
@@ -85,7 +91,7 @@ send_bth = BTH(
     ackreq = True,
 )
 send_imm_data = ImmDt(data=1234)
-send_req = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/send_bth/send_imm_data
+send_req = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/send_bth/send_imm_data
 send_req.show()
 send(send_req)
 roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
@@ -112,7 +118,7 @@ write_imm_bth = BTH(
 )
 write_imm_reth = RETH(va=dst_va, rkey=dst_rkey, dlen=0)
 write_imm_data = ImmDt(data=1234)
-write_imm_req = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_imm_bth/write_imm_reth/write_imm_data
+write_imm_req = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_imm_bth/write_imm_reth/write_imm_data
 write_imm_req.show()
 send(write_imm_req)
 src_npsn = src_cpsn + 1
@@ -136,7 +142,7 @@ read_zero_bth = BTH(
     dqpn = dst_qpn,
 )
 read_zero_reth = RETH(va=0, rkey=0, dlen=0)
-read_zero_req = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/read_zero_bth/read_zero_reth
+read_zero_req = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/read_zero_bth/read_zero_reth
 read_zero_req.show()
 send(read_zero_req)
 roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
@@ -191,7 +197,7 @@ if read_size <= PMTU:
         psn = read_req[BTH].psn,
         dqpn = dst_qpn,
     )
-    nak_resp = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/nak_seq_bth/nak_seq_aeth
+    nak_resp = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/nak_seq_bth/nak_seq_aeth
     nak_resp.show()
     send(nak_resp)
     roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
@@ -204,7 +210,7 @@ if read_size <= PMTU:
         dqpn = dst_qpn,
     )
     read_data = struct.pack(f'<{read_size}s', bytearray(read_str, 'ascii'))
-    read_resp = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/read_resp_bth/read_aeth/Raw(load=read_data)
+    read_resp = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/read_resp_bth/read_aeth/Raw(load=read_data)
     read_resp.show()
     send(read_resp)
 else:
@@ -214,7 +220,7 @@ else:
         psn = src_epsn,
         dqpn = dst_qpn,
     )
-    nak_resp = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/nak_seq_bth/nak_seq_aeth
+    nak_resp = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/nak_seq_bth/nak_seq_aeth
     nak_resp.show()
     send(nak_resp)
     roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
@@ -227,7 +233,7 @@ else:
         dqpn = dst_qpn,
     )
     read_data = struct.pack(f'<{PMTU}s', bytearray(read_str, 'ascii'))
-    read_resp = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/read_resp_bth/read_aeth/Raw(load=read_data)
+    read_resp = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/read_resp_bth/read_aeth/Raw(load=read_data)
     read_resp.show()
     send(read_resp)
 
@@ -239,7 +245,7 @@ else:
             psn = src_epsn + i + 1,
             dqpn = dst_qpn,
         )
-        nak_resp = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/nak_seq_bth/nak_seq_aeth
+        nak_resp = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/nak_seq_bth/nak_seq_aeth
         nak_resp.show()
         send(nak_resp)
         roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
@@ -254,7 +260,7 @@ else:
         read_data = struct.pack(f'<{PMTU}s', bytearray(read_str, 'ascii'))
         mid_read_data_len = len(read_data)
         print(f'mid read data len={mid_read_data_len}')
-        read_resp = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/read_resp_bth/read_aeth/Raw(load=read_data)
+        read_resp = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/read_resp_bth/read_aeth/Raw(load=read_data)
         read_resp.show()
         send(read_resp)
 
@@ -265,7 +271,7 @@ else:
         psn = src_epsn + read_resp_mid_pkt_num + 1,
         dqpn = dst_qpn,
     )
-    nak_resp = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/nak_seq_bth/nak_seq_aeth
+    nak_resp = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/nak_seq_bth/nak_seq_aeth
     nak_resp.show()
     send(nak_resp)
     roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
@@ -278,7 +284,7 @@ else:
         dqpn = dst_qpn,
     )
     read_data = struct.pack(f'<{last_read_size}s', bytearray(read_str, 'ascii'))
-    read_resp = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/read_resp_bth/read_aeth/Raw(load=read_data)
+    read_resp = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/read_resp_bth/read_aeth/Raw(load=read_data)
     read_resp.show()
     send(read_resp)
 src_epsn += read_resp_pkt_num
@@ -306,7 +312,7 @@ read_bth = BTH(
     dqpn = dst_qpn,
 )
 read_reth = RETH(va=dst_va, rkey=dst_rkey, dlen=read_size)
-read_req = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/read_bth/read_reth
+read_req = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/read_bth/read_reth
 read_req.show()
 send(read_req)
 src_npsn = src_cpsn + read_resp_pkt_num
@@ -341,7 +347,7 @@ if write_size <= PMTU:
         ackreq = True,
     )
     write_data = struct.pack(f'<{write_size}s', bytearray(write_str, 'ascii'))
-    write_req = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_bth/write_reth/Raw(load=write_data)
+    write_req = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_bth/write_reth/Raw(load=write_data)
     write_req.show()
     send(write_req)
     src_npsn = src_cpsn + 1
@@ -354,7 +360,7 @@ else:
         ackreq = False,
     )
     write_data = struct.pack(f'<{PMTU}s', bytearray(write_str, 'ascii'))
-    write_req = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_bth/write_reth/Raw(load=write_data)
+    write_req = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_bth/write_reth/Raw(load=write_data)
     write_req.show()
     send(write_req)
 
@@ -367,7 +373,7 @@ else:
             ackreq = False,
         )
         write_data = struct.pack(f'<{PMTU}s', bytearray(write_str, 'ascii'))
-        write_req = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_bth/Raw(load=write_data)
+        write_req = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_bth/Raw(load=write_data)
         write_req.show()
         send(write_req)
 
@@ -379,7 +385,7 @@ else:
         ackreq = True,
     )
     write_data = struct.pack(f'<{last_write_size}s', bytearray(write_str, 'ascii'))
-    write_req = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_bth/Raw(load=write_data)
+    write_req = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_bth/Raw(load=write_data)
     write_req.show()
     send(write_req)
     src_npsn = src_cpsn + write_req_pkt_num
@@ -409,7 +415,7 @@ write_imm_resp_bth = BTH(
     psn = src_epsn,
     dqpn = dst_qpn,
 )
-write_imm_resp = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_imm_resp_bth/AETH(code='ACK', value=31, msn=1)
+write_imm_resp = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_imm_resp_bth/AETH(code='ACK', value=31, msn=1)
 send(write_imm_resp)
 src_epsn += 1
 
@@ -434,7 +440,7 @@ atomic_ack_bth = BTH(
     psn = atomic_req[BTH].psn,
     dqpn = dst_qpn,
 )
-atomic_ack = IP(dst=DST_IP)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/atomic_ack_bth/AETH(code='ACK', value=31, msn=1)/AtomicAckETH(orig=0)
+atomic_ack = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/atomic_ack_bth/AETH(code='ACK', value=31, msn=1)/AtomicAckETH(orig=0)
 atomic_ack.show()
 send(atomic_ack)
 # Exchange atomic done

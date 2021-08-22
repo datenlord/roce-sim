@@ -1,0 +1,22 @@
+name: CI
+on:
+  pull_request:
+    branches: [master]
+
+jobs:
+  build-and-simulate:
+    name: Build and Simulate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Check out Scapy code
+        uses: actions/checkout@v2
+        with:
+          repository: secdev/scapy
+          path: ./scapy
+      - name: Run
+        run: |
+          ./run.sh
+      - name: Setup tmate session
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
