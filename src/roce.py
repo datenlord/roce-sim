@@ -296,7 +296,7 @@ class IETH(Packet):
         XIntField("rkey", 0),
     ]
 
-class RETHImmDt(Packet):
+class RETHImmDt(Packet): # for RDMA_WRITE_ONLY_WITH_IMMEDIATE only
     name = "RETHImmdt"
     fields_desc = [
         XLongField("va", 0),
@@ -310,7 +310,7 @@ bind_layers(BTH, CNPPadding, opcode=CNP_OPCODE)
 bind_layers(Ether, GRH, type=0x8915)
 bind_layers(GRH, BTH)
 
-bind_layers(AETH, AtomicAckETH, opcode=opcode('RC', 'ATOMIC_ACKNOWLEDGE')[0])
+#bind_layers(AETH, AtomicAckETH) this layer binding is not work
 bind_layers(BTH, AETH, opcode=opcode('RC', 'ACKNOWLEDGE')[0])
 bind_layers(BTH, AETH, opcode=opcode('RC', 'ATOMIC_ACKNOWLEDGE')[0])
 bind_layers(BTH, AETH, opcode=opcode('RC', 'RDMA_READ_RESPONSE_FIRST')[0])
@@ -326,7 +326,7 @@ bind_layers(BTH, ImmDt, opcode=opcode('RC', 'RDMA_WRITE_LAST_WITH_IMMEDIATE')[0]
 bind_layers(BTH, RETH, opcode=opcode('RC', 'RDMA_READ_REQUEST')[0])
 bind_layers(BTH, RETH, opcode=opcode('RC', 'RDMA_WRITE_FIRST')[0])
 bind_layers(BTH, RETH, opcode=opcode('RC', 'RDMA_WRITE_ONLY')[0])
-#bind_layers(BTH, RETH, opcode=opcode('RC', 'RDMA_WRITE_ONLY_WITH_IMMEDIATE')[0])
+#bind_layers(BTH, RETH, opcode=opcode('RC', 'RDMA_WRITE_ONLY_WITH_IMMEDIATE')[0]) this layer binding is not work
 bind_layers(BTH, RETHImmDt, opcode=opcode('RC', 'RDMA_WRITE_ONLY_WITH_IMMEDIATE')[0])
 bind_layers(UDP, BTH, dport=4791)
 bind_layers(UDP, BTH, sport=4791)

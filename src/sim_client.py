@@ -155,11 +155,11 @@ print(parsed_fields)
 # RoCE write and ack
 sg = SG(pos_in_mr = POS_IN_MR, length = write_size, lkey = mr.lkey())
 sr = SendWR(
-   opcode = WR_OPCODE.RDMA_WRITE,
-   sgl = sg,
-   rmt_va = dst_va,
-   rkey = dst_rkey,
-   send_flags = SEND_FLAGS.SIGNALED,
+    opcode = WR_OPCODE.RDMA_WRITE,
+    sgl = sg,
+    rmt_va = dst_va,
+    rkey = dst_rkey,
+    send_flags = SEND_FLAGS.SIGNALED,
 )
 qp.post_send(sr)
 qp.process_one_sr()

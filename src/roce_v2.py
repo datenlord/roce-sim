@@ -1,3 +1,4 @@
+import copy
 import logging
 import random
 import socket
@@ -5,16 +6,18 @@ import struct
 import sys
 
 # from logging import debug, info, warning, error, critical
-from copy import deepcopy
 from roce_enum import *
 from scapy.all import *
 from roce import *
 
-ROCE_PORT = 4791
-UDP_BUF_SIZE = 1024
-PKEY_DEFAULT = 0xFFFF
-CREDIT_CNT_INVALID = 31
 ATOMIC_BYTE_SIZE = 8
+UDP_BUF_SIZE = 1024
+
+CREDIT_CNT_INVALID = 31
+DEFAULT_PKEY = 0xFFFF
+DEFAULT_RNR_WAIT_TIME = 4
+DEFAULT_TIMEOUT = 4
+ROCE_PORT = 4791
 
 MAX_SSN = 2**24
 MAX_MSN = 2**24
@@ -130,7 +133,7 @@ class MR:
         self.remote_key = rkey
         self.length = length
         self.access_flags = access_flags
-        self.byte_data = bytearray(struct.pack(f'<{self.len()}s', b''))
+        self.byte_data = bytearray(struct.pack(f'<{self.len()}s', b'\0')) # '\0' has no endien issue
         # self.pos = 0
 
     def addr(self):
@@ -391,12 +394,12 @@ class ReadRespCtx:
 
 class SQ:
     def __init__(self, pd, cq, qpn, sq_psn, pmtu, access_flags, use_ipv6,
-        pkey = PKEY_DEFAULT,
-        draining = 0,
+        pkey = DEFAULT_PKEY,
+        draining = False,
         max_rd_atomic = 10,
         max_dest_rd_atomic = 10,
-        min_rnr_timer = 10,
-        timeout = 10,
+        min_rnr_timer = DEFAULT_RNR_WAIT_TIME,
+        timeout = DEFAULT_TIMEOUT,
         retry_cnt = 3,
         rnr_rery = 3,
     ):
@@ -429,6 +432,7 @@ class SQ:
         self.min_unacked_psn = sq_psn
 
         self.cur_read_resp_ctx = None
+        self.rnr_wait = False
 
     def modify(self,
         qps = None,
@@ -716,14 +720,18 @@ class SQ:
         )
         write_req = None
         if RC.only_req_pkt(rc_op):
-            write_req = write_bth/write_reth
+            if RC.has_imm(rc_op):
+                # RDMA_WRITE_ONLY_WITH_IMMEDIATE use RETHImmDt, instead of RETH/ImmDt
+                reth_imm_data = RETHImmDt(va = sr.raddr(), rkey = sr.rkey(), dlen = write_size, data = sr.imm_data_or_inv_rkey())
+                write_req = write_bth/reth_imm_data
+            else:
+                write_req = write_bth/write_reth
         else:
-            write_req = write_bth
-        if RC.has_imm(rc_op):
-            #imm_data = ImmDt(data = sr.imm_data_or_inv_rkey())
-            #write_req = write_req/imm_data
-            reth_imm_data = RETHImmDt(va = sr.raddr(), rkey = sr.rkey(), dlen = write_size, data = sr.imm_data_or_inv_rkey())
-            write_req = write_bth/reth_imm_data
+            if RC.has_imm(rc_op):
+                imm_data = ImmDt(data = sr.imm_data_or_inv_rkey())
+                write_req = write_bth/imm_data
+            else:
+                write_req = write_bth
         if write_size > 0:
             raw_pkt = Raw(load = write_data[((write_req_pkt_num - 1) * self.pmtu) : write_size])
             write_req = write_req/raw_pkt
@@ -798,21 +806,26 @@ class SQ:
 
             if update_min_unacked_psn:
                 self.min_unacked_psn = Util.next_psn(resp[BTH].psn) # TODO: delete acked request packets
-        logging.debug(f'min unacked psn={self.min_unacked_psn}, next psn={self.sq_psn}')
+        logging.debug(f'min unacked PSN={self.min_unacked_psn}, next PSN={self.sq_psn}')
 
-    def retry(self, psn_begin_retry):
+    def retry(self, psn_begin_retry, psn_end_retry = None):
+        if psn_end_retry is None:
+            # Retry packet with PSN from psn_begin_retry to psn_end_retry (not included)
+            psn_end_retry = self.sq_psn
         pre_retry_psn = psn_begin_retry
+
         for retry_psn in Util.psn_range(psn_begin_retry, self.sq_psn):
-            if retry_psn in self.req_pkt_dict:
-                pkt_to_retry, retry_wr_ssn = self.req_pkt_dict[retry_psn]
-                self.send_pkt(retry_wr_ssn, pkt_to_retry, save_pkt = False)
-                pre_retry_psn = retry_psn
-            else:
-                pre_pkt_to_retry, pre_retry_wr_ssn = self.req_pkt_dict[pre_retry_psn]
-                assert pre_pkt_to_retry[BTH].opcode == RC.RDMA_READ_REQUEST, 'should be read request asking for multiple responses'
-                retry_read_wr = self.send_wqe_dict[pre_retry_wr_ssn]
-                assert retry_read_wr.op() == WR_OPCODE.RDMA_READ, 'should be read WR asking for multiple responses'
-                assert retry_read_wr.len() > self.pmtu, 'read WR DMA length should > PMTU'
+            if retry_psn != psn_end_retry:
+                if retry_psn in self.req_pkt_dict:
+                    pkt_to_retry, retry_wr_ssn = self.req_pkt_dict[retry_psn]
+                    self.send_pkt(retry_wr_ssn, pkt_to_retry, save_pkt = False)
+                    pre_retry_psn = retry_psn
+                else:
+                    pre_pkt_to_retry, pre_retry_wr_ssn = self.req_pkt_dict[pre_retry_psn]
+                    assert pre_pkt_to_retry[BTH].opcode == RC.RDMA_READ_REQUEST, 'should be read request asking for multiple responses'
+                    retry_read_wr = self.send_wqe_dict[pre_retry_wr_ssn]
+                    assert retry_read_wr.op() == WR_OPCODE.RDMA_READ, 'should be read WR asking for multiple responses'
+                    assert retry_read_wr.len() > self.pmtu, 'read WR DMA length should > PMTU'
 
     def ack_send_or_write_req(self, psn_to_ack):
         pkt_to_ack, pending_wr_ssn = self.req_pkt_dict[psn_to_ack]
@@ -846,34 +859,8 @@ class SQ:
         for unacked_psn in Util.psn_range(self.min_unacked_psn, psn_upper_limit):
             ack_res = self.ack_send_or_write_req(unacked_psn)
             if not ack_res: # unacked_psn is either read or atomic request, coalesce ack should stop
-                return (False, unacked_psk)
-        # cur_psn = self.min_unacked_psn
-        # for unacked_psn in Util.psn_range(self.min_unacked_psn, psn_upper_limit):
-        #     unacked_pkt, pending_wr_ssn = self.req_pkt_dict[unacked_psn]
-        #     rc_op = unacked_pkt[BTH].opcode
-        #     cur_psn = unacked_psn
-        #     # Handle implicitly unack read and atomic operations
-        #     if rc_op == RC.RDMA_READ_REQUEST or RC.atomic(rc_op):
-        #         return (False, cur_psn)
-
-        #     # Implicitly ack previous send and write operations
-        #     if RC.last_req_pkt(rc_op) or RC.only_req_pkt(rc_op):
-        #         sr = self.send_wqe_dict[pending_wr_ssn]
-        #         # Generate CQE for each implicitly acked send or write WR
-        #         cqe = CQE(
-        #             wr_id = sr.id(),
-        #             status = WC_STATUS.SUCCESS,
-        #             opcode = WC_OPCODE.from_rc_op(rc_op),
-        #             length = sr.len(),
-        #             qpn = self.sqpn(),
-        #             src_qp = self.dqpn(),
-        #             wc_flags = 0, # Requester side CQE no need to handle IBV_WC_WITH_IMM or IBV_WC_WITH_INV
-        #         )
-        #         # No need to retire top RQ element since this is request side, no RQ logic involved
-        #         self.cq.push(cqe)
-        #         # Delete completed send WR # TODO: delete acked request packets
-        #         del self.send_wqe_dict[pending_wr_ssn]
-        return (True, psn_upper_limit)
+                return (False, unacked_psk) # coalesce_ack enountered implicit NAK
+        return (True, psn_upper_limit) # coalesce_ack success
 
     def handle_ack(self, ack):
         assert ack[BTH].opcode == RC.ACKNOWLEDGE, 'should be ack response'
@@ -932,19 +919,58 @@ class SQ:
                 self.cq.push(flush_cqe)
         elif ack[AETH].code == 1: # RNR NAK, should retry
             rnr_psn = ack[BTH].psn
+            rnr_wait_time = ack[AETH].value if ack[AETH].value >= self.min_rnr_timer else self.min_rnr_timer
+            logging.debug(f'SQ={self.sqpn()} received RNR NAK with PSN={rnr_psn} and wait time={rnr_wait_time}')
+            self.rnr_wait = True
+            # time.sleep(rnr_wait_time) # TODO: handle RNR wait time
+            self.rnr_wait = False
             assert rnr_psn in self.req_pkt_dict, 'the PSN of RNR NAK should be of a request sent by SQ and saved in req_pkt_dict'
             rnr_pkt, rnr_wr_ssn = self.req_pkt_dict[rnr_psn]
-            self.send_pkt(rnr_wr_ssn, rnr_pkt, save_pkt = False)
+            rc_op = rnr_pkt[BTH].opcode
+            assert RC.send_only(rc_op) or rc_op in [
+                RC.SEND_FIRST,
+                RC.RDMA_WRITE_ONLY_WITH_IMMEDIATE,
+                RC.RDMA_WRITE_LAST_WITH_IMMEDIATE,
+            ], 'only send first/only and write only/last with imm can be reried by RNR'
+
+            if rc_op == RC.SEND_FIRST: # Retry whole send request
+                send_wr = self.send_wqe_dict[rnr_wr_ssn]
+                assert send_wr.len() > self.pmtu, 'this RNR retried send request should have multiple packets'
+                send_req_pkt_num = math.ceil(send_wr.len() / self.pmtu)
+                self.retry(rnr_psn, psn_end_retry = ((rnr_psn + send_req_pkt_num) % MAX_PSN))
+            else:
+                if rc_op == RC.RDMA_WRITE_LAST_WITH_IMMEDIATE:
+                    write_wr = self.send_wqe_dict[rnr_wr_ssn]
+                    assert write_wr.len() > self.pmtu, 'the RNR retried write request should have multiple packets'
+                    write_req_pkt_num = math.ceil(write_wr.len() / self.pmtu)
+                    #first_write_req_psn = (rnr_psn - (write_req_pkt_num - 1)) % MAX_PSN
+                    #first_write_req_pkt = self.req_pkt_dict[first_write_req_psn]
+                    write_bth = BTH(
+                        opcode = RC.RDMA_WRITE_ONLY_WITH_IMMEDIATE,
+                        psn = rnr_psn,
+                        dqpn = rnr_pkt[BTH].dqpn,
+                        ackreq = rnr_pkt[BTH].ackreq,
+                        solicited = rnr_pkt[BTH].solicited,
+                    )
+                    write_offset = (write_req_pkt_num - 1) * self.pmtu
+                    write_reth = RETH(va = write_wr.raddr() + write_offset, rkey = write_wr.rkey(), dlen = write_wr.len() - write_offset)
+
+                    retry_only_write_req_pkt = write_bth/write_reth/ImmDt(data = rnr_pkt[ImmDt].data)/Raw(load = rnr_pkt[Raw].load)
+                    logging.debug(f'SQ={self.sqpn()} RNR retried RDMA_WRITE_LAST_WITH_IMMEDIATE request=' + rnr_pkt.show(dump = True) + ', but changed to RDMA_WRITE_ONLY_WITH_IMMEDIATE request=' + retry_only_write_req_pkt.show(dump = True))
+                    rnr_pkt = retry_only_write_req_pkt
+                self.send_pkt(rnr_wr_ssn, rnr_pkt, save_pkt = False)
+            # self.retry(rnr_psn) # TODO: double check RNR retry only the specified request packet or retry all thereafter
 
         elif (ack[AETH].code == 3 and ack[AETH].value == 0): # NAK seq error, should retry
             seq_err_psn = ack[BTH].psn
+            logging.debug(f'SQ={self.sqpn()} received NAK SEQ ERR with PSN={seq_err_psn}')
             if seq_err_psn not in self.req_pkt_dict: # the seq_err_psn is in the middle of read responses, start retry partial read
                 assert self.cur_read_resp_ctx is not None, 'NAK sequence error occured in the middle of read responses, should have read response context'
                 orig_read_req_psn = self.cur_read_resp_ctx.orig_read_req_psn
                 orig_read_req, orig_read_wr_ssn = self.req_pkt_dict[orig_read_req_psn]
                 assert orig_read_wr_ssn == self.cur_read_resp_ctx.read_ssn, 'orig_read_wr_ssn shoud == self.cur_read_resp_ctx.read_ssn'
                 # Build a new read request, but its PSN is within the range of the read response to the original read request
-                retry_read_req = deepcopy(orig_read_req)
+                retry_read_req = copy.deepcopy(orig_read_req)
                 read_offset = self.cur_read_resp_ctx.read_offset
                 retry_read_req[BTH].psn = seq_err_psn
                 retry_read_req[RETH].va += read_offset
@@ -1037,12 +1063,14 @@ class SQ:
 
         # TODO: handle locally detected error: Local Memory Protection Error / Requester Class B
         assert self.pd.validate_mr(rc_op, atomic_lkey, atomic_laddr, ATOMIC_BYTE_SIZE), 'atomic response local access error'
+        # Because bind_layers(AETH, AtomicAckETH) is not work, so use Raw instead of AtomicAckETH
+        assert len(atomic_ack[Raw]) == ATOMIC_BYTE_SIZE, 'AtomicAckETH size not correct'
         atomic_mr = self.pd.get_mr(atomic_lkey)
-        atomic_mr.write(byte_data = atomic_ack[AtomicAckETH].orig, addr = atomic_laddr)
+        atomic_mr.write(byte_data = atomic_ack[Raw].load, addr = atomic_laddr)
         atomic_cqe = CQE(
             wr_id = atomic_wr.id(),
             status = WC_STATUS.SUCCESS,
-            opcode = WC_OPCODE.from_rc_op(rc_op),
+            opcode = WC_OPCODE.from_wr_op(atomic_wr.op()),
             length = ATOMIC_BYTE_SIZE,
             qpn = self.sqpn(),
             src_qp = self.dqpn(),
@@ -1056,7 +1084,7 @@ class SQ:
 
 class RQ:
     def __init__(self, pd, cq, sq, qpn, rq_psn, pmtu, access_flags, use_ipv6,
-        pkey = PKEY_DEFAULT,
+        pkey = DEFAULT_PKEY,
         max_rd_atomic = 10,
         max_dest_rd_atomic = 10,
         min_rnr_timer = 10,
@@ -1181,9 +1209,10 @@ class RQ:
                     self.send_pkt(dup_resp, save_pkt = False)
                 else:
                     logging.debug(f'RQ={self.sqpn()} received duplicate atomic request: ' + req.show(dump = True) + ', but the response was not match: ' + dup_resp.show(dump = True))
-
-        else: # TODO: handle sequence error: Out of Sequence Request Packet / Responder Class B
+        else:
+            # Handle NAK sequence error: Out of Sequence Request Packet / Responder Class B
             logging.debug(f'RQ={self.sqpn()} had sequence error, ePSN={self.rq_psn} but received request: ' + req.show(dump = True))
+            self.process_nak_seq_err()
 
     def send_pkt(self, resp, save_pkt = True):
         if not self.dqpn():
@@ -1253,8 +1282,10 @@ class RQ:
 
         # TODO: handle send request has no data
         if RC.first_req_pkt(rc_op) or RC.only_req_pkt(rc_op):
-            # TODO: handle RNR NAK: Resources Not Ready Error / Responder Class B
-            assert not self.empty(), 'RQ empty'
+            # Handle RNR NAK: Resources Not Ready Error / Responder Class B
+            if self.empty():
+                logging.debug(f'RQ={self.sqpn()} is empty, response RNR NAK to send request')
+                return self.process_nak_rnr(send_req)
             rr = self.pop()
             self.cur_send_req_ctx = (rr, 0)
 
@@ -1346,8 +1377,10 @@ class RQ:
             if RC.has_imm(rc_op):
                 cqe_wc_flags = WC_FLAGS.WITH_IMM
                 cqe_imm_data = write_req[RETHImmDt].data
-                # TODO: handle RNR NAK: Resources Not Ready Error / Responder Class B
-                assert not self.empty(), 'RQ is empty but write with immediate data needs to consume a receive WR'
+                # Handle RNR NAK: Resources Not Ready Error / Responder Class B
+                if self.empty():
+                    logging.debug(f'RQ={self.sqpn()} is empty but write with immediate data needs to consume a receive WR')
+                    return self.process_nak_rnr(write_req)
                 rr = self.pop()
                 # Generate CQE for received send request
                 cqe = CQE(
@@ -1468,15 +1501,35 @@ class RQ:
             psn = req[BTH].psn,
             dqpn = self.dqpn(),
         )
-        # TODO: RQ flow control
+        # TODO: support RQ flow control
         ack = ack_bth/AETH(code = 'ACK', value = CREDIT_CNT_INVALID, msn = self.msn)
         self.send_pkt(ack)
+
+    def process_nak_rnr(self, req):
+        rnr_nak_bth = BTH(
+            opcode = RC.ACKNOWLEDGE,
+            psn = req[BTH].psn,
+            dqpn = self.dqpn(),
+        )
+        rnr_nak_aeth = AETH(code = 'RNR', value = self.min_rnr_timer, msn = self.msn)
+        rnr_nak = rnr_nak_bth/rnr_nak_aeth
+        self.send_pkt(rnr_nak)
+
+    def process_nak_seq_err(self):
+        seq_nak_bth = BTH(
+            opcode = RC.ACKNOWLEDGE,
+            psn = self.rq_psn,
+            dqpn = self.dqpn(),
+        )
+        seq_nak_aeth = AETH(code = 'NAK', value = 0, msn = self.msn)
+        seq_nak = seq_nak_bth/seq_nak_aeth
+        self.send_pkt(seq_nak)
 
 class QP:
     def __init__(self, pd, cq, qpn, pmtu, access_flags, use_ipv6,
         rq_psn = 0,
         sq_psn = 0,
-        pkey = PKEY_DEFAULT,
+        pkey = DEFAULT_PKEY,
         sq_draining = 0,
         max_rd_atomic = 10,
         max_dest_rd_atomic = 10,
