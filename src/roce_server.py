@@ -208,6 +208,7 @@ print(f'write request packet num={write_req_pkt_num}')
 for i in range(write_req_pkt_num):
     roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
     write_req = BTH(roce_bytes)
+    assert write_req.psn == src_epsn + i, 'write request PSN not match ePSN'
     write_req.show()
 #roce_pkts = sniff(filter=f'udp port {ROCE_PORT}', count=1)
 #write_req = roce_pkts[0]
