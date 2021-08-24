@@ -2,6 +2,7 @@ import argparse
 import math
 import socket
 import struct
+import time
 
 from multiprocessing import Process
 from scapy.all import *
@@ -19,26 +20,35 @@ DST_PORT = 9527
 SRC_PORT = 6543
 UDP_BUF_SIZE = 2048
 
-S_VA = '0000556acaa2ea50'
-S_RKEY = 208
-S_QPN = 17
-S_LID = '0000'
+# Parameter to exchange with server to setup QP
 #S_GID = '00000000000000000000ffffc0a87abe'
+S_LID = 0
+S_MAX_RD_ATOMIC = 10
+S_MIN_RNR_TIMER = 0 # 655_360 usec
+S_PSN = 1000
+S_QPN = 17
+S_RETRY_CNT = 3
+S_RKEY = 208
+S_RNR_RETRY = 3
+S_TIMEOUT = 17 # 536.9 msec
+S_VA = '0000556acaa2ea50'
 
 ReceiveReady = 0
 SendImm = 1
 WriteImm = 2
 ReadZero = 3
-SendSize = 4
-ReadSize = 5
-WriteSize = 6
-WriteDone = 7
-AtomicReady = 8
-AtomicDone = 9
+SendImmSize = 4
+AtomicReady = 5
+AtomicDone = 6
+WriteImmSize = 7
+SendSize = 8
+ReadSize = 9
+SendInv = 10
+SendDone = 11
 
-src_cpsn = 0
-src_npsn = 0
-src_epsn = 0
+src_cpsn = 0 # for SQ
+src_npsn = 0 # for SQ
+src_epsn = 0 # for RQ
 
 parser = argparse.ArgumentParser(description='Input server IP and client IP')
 parser.add_argument('-s', action='store', dest='src_ip')
@@ -57,35 +67,76 @@ udp_sock.bind(client_bind_addr)
 srv_addr = (arg_res.dst_ip, DST_PORT)
 udp_sock.sendto(struct.pack('c', b'1'), srv_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-print(struct.unpack('<c', exch_data))
+#print(struct.unpack('<c', exch_data))
 
 # Receive metadata
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-parsed_fields = struct.unpack('>QIIH16s', exch_data)
-dst_va, dst_rkey, dst_qpn, dst_lid, dst_gid = parsed_fields
-print(parsed_fields)
+#print(f'len(exch_data)={len(exch_data)}, exch_data={exch_data}')
+parsed_fields = struct.unpack('!BBBBBIQIIB16s', exch_data)
+(
+    dst_retry_cnt,
+    dst_rnr_retry,
+    dst_max_rd_atomic,
+    dst_rnr_timer,
+    dst_timeout,
+    dst_start_psn,
+    dst_va,
+    dst_rkey,
+    dst_qpn,
+    dst_lid,
+    dst_gid,
+) = parsed_fields
+print(f'received server metadata={parsed_fields}')
 # Send metadata
+src_retry_cnt = '{:02x}'.format(S_RETRY_CNT)
+src_rnr_retry = '{:02x}'.format(S_RNR_RETRY)
+src_max_rd_atomic = '{:02x}'.format(S_MAX_RD_ATOMIC)
+src_rnr_timer = '{:02x}'.format(S_MIN_RNR_TIMER)
+src_timeout = '{:02x}'.format(S_TIMEOUT)
+src_start_psn = '{:08x}'.format(S_PSN)
 src_va = '{:016x}'.format(POS_IN_MR)
 src_rkey = '{:08x}'.format(S_RKEY)
 src_qpn = '{:08x}'.format(S_QPN)
+src_lid = '{:02x}'.format(S_LID)
 src_gid = '{0:0>32}'.format('ffff' + socket.inet_aton(arg_res.src_ip).hex())
-client_metadata = src_va + src_rkey + src_qpn + S_LID + src_gid
+client_metadata = (
+    src_retry_cnt
+    + src_rnr_retry
+    + src_max_rd_atomic
+    + src_rnr_timer
+    + src_timeout
+    + src_start_psn
+    + src_va
+    + src_rkey
+    + src_qpn
+    + src_lid
+    + src_gid
+)
 udp_sock.sendto(bytes.fromhex(client_metadata), peer_addr)
+# Update SQ and RQ start PSN
+src_cpsn = S_PSN         # for SQ
+src_npsn = src_cpsn      # for SQ
+src_epsn = dst_start_psn # for RQ
 
 # Exchange receive ready
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack('<i', ReceiveReady), peer_addr)
 print(struct.unpack('<i', exch_data))
 
+case_no = 0
+
 ###############################################################################
 # Case 1: client send zero data with imm to server and retry due to NAK sequence error
 ###############################################################################
+
+case_no += 1
+print(f'Case {case_no} start...')
 
 # Exchange send imm
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack('<i', SendImm), peer_addr)
 parsed_fields = struct.unpack('<i', exch_data)
-print(struct.unpack('<i', exch_data))
+#print(struct.unpack('<i', exch_data))
 
 # RoCE send imm and ack
 src_npsn = src_cpsn + 1
@@ -107,8 +158,9 @@ assert (
     seq_nak_resp[BTH].opcode == RC.ACKNOWLEDGE
     and seq_nak_resp[AETH].code == 3 and seq_nak_resp[AETH].value == 0
 ), 'send with wrong PSN should receive NAK sequence error'
+send(send_req) # Send request with wrong PSN again, should have no response
 send_req[BTH].psn = src_cpsn
-send(send_req)
+send(send_req) # Send request with correct PSN, should have response
 roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
 send_resp = BTH(roce_bytes)
 send_resp.show()
@@ -119,13 +171,16 @@ src_cpsn = src_npsn
 # Case 2: client write zero data with imm to server and retried due to RNR
 ###############################################################################
 
+case_no += 1
+print(f'Case {case_no} start...')
+
 # Exchange write imm
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack('<i', WriteImm), peer_addr)
 parsed_fields = struct.unpack('<i', exch_data)
-print(parsed_fields)
+#print(parsed_fields)
 
-# RoCE write with imm and ack
+# RoCE write with imm and RNR retry and ack
 src_npsn = src_cpsn + 1
 write_imm_bth = BTH(
     opcode = RC.RDMA_WRITE_ONLY_WITH_IMMEDIATE,
@@ -137,11 +192,13 @@ write_imm_reth = RETH(va=dst_va, rkey=dst_rkey, dlen=0)
 write_imm_data = ImmDt(data=1234)
 write_imm_req = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_imm_bth/write_imm_reth/write_imm_data
 write_imm_req.show()
-send(write_imm_req)
+send(write_imm_req) # Send write operation and expect RNR NAK
 roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
 rnr_nak_resp = BTH(roce_bytes)
 assert rnr_nak_resp[BTH].opcode == RC.ACKNOWLEDGE and rnr_nak_resp[AETH].code == 1, 'write with imm should have NAK RNR when no receive buffer'
-send(write_imm_req)
+send(write_imm_req) # Send write again but no response this time
+time.sleep(0.65536) # 0.65536s is the largest RNR timer to wait
+send(write_imm_req) # Wait after RNR timer then send write again and expect ACK
 roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
 write_imm_resp = BTH(roce_bytes)
 write_imm_resp.show()
@@ -152,11 +209,14 @@ src_cpsn = src_npsn
 # Case 3: client read zero data from server
 ###############################################################################
 
+case_no += 1
+print(f'Case {case_no} start...')
+
 # Exchange read zero
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack('<i', ReadZero), peer_addr)
 parsed_fields = struct.unpack('<i', exch_data)
-print(parsed_fields)
+#print(parsed_fields)
 
 # RoCE read zero and ack
 src_npsn = src_cpsn + 1
@@ -179,21 +239,24 @@ src_cpsn = src_npsn
 # Case 4: server send to client without requesting ACK and retry due to NAK sequence error
 ###############################################################################
 
+case_no += 1
+print(f'Case {case_no} start...')
+
 # Exchange send size and RNR NAK
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-udp_sock.sendto(struct.pack('<iq', SendSize, -1), peer_addr)
+udp_sock.sendto(struct.pack('<iq', SendImmSize, -1), peer_addr)
 parsed_fields = struct.unpack('<iq', exch_data)
 _, send_size = parsed_fields
-print(f'send_size={send_size}')
-print(parsed_fields)
+#print(f'send_size={send_size}')
+#print(parsed_fields)
 
 # RoCE send and NAK seq err retry without ACK
 send_pkt_num = math.ceil(send_size / PMTU) if send_size > 0 else 1
 for i in range(send_pkt_num):
     roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
     send_req = BTH(roce_bytes)
-    assert send_req.psn == src_epsn + i, 'send request PSN not match ePSN'
     send_req.show()
+    assert send_req.psn == src_epsn + i, 'send request PSN not match ePSN'
 seq_nak_bth = BTH(
     opcode = RC.ACKNOWLEDGE,
     psn = src_epsn,
@@ -217,10 +280,13 @@ src_epsn += send_pkt_num
 # Case 5: client send atomic request to server
 ###############################################################################
 
+case_no += 1
+print(f'Case {case_no} start...')
+
 # Exchange atomic ready
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack('<i', AtomicReady), peer_addr)
-print(struct.unpack('<i', exch_data))
+#print(struct.unpack('<i', exch_data))
 
 # RoCE atomic and ack
 src_npsn = src_cpsn + 1
@@ -231,7 +297,7 @@ atomic_bth = BTH(
     ackreq = True,
 )
 aligned_dst_va = ((dst_va + 7) >> 3) << 3
-print(f'aligned dst va={aligned_dst_va}, dst va={dst_va}')
+#print(f'aligned dst va={aligned_dst_va}, dst va={dst_va}')
 atomic_eth = AtomicETH(
     va = aligned_dst_va,
     rkey = dst_rkey,
@@ -248,19 +314,47 @@ assert atomic_resp.psn == src_npsn - 1, 'atomic response PSN not match expected'
 src_cpsn = src_npsn
 
 ###############################################################################
-# Case 6: client send atomic request to server
+# Case 6: client send atomic and write request to server and retry by implicit NAK
 ###############################################################################
+
+case_no += 1
+print(f'Case {case_no} start...')
 
 # Exchange atomic ready
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-udp_sock.sendto(struct.pack('<i', AtomicReady), peer_addr)
-print(struct.unpack('<i', exch_data))
+udp_sock.sendto(struct.pack('<i', AtomicDone), peer_addr)
+#print(struct.unpack('<i', exch_data))
 
-# RoCE atomic and ack
+# RoCE atomic
 roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
 atomic_req = BTH(roce_bytes)
 atomic_req.show()
 assert atomic_req[BTH].psn == src_epsn, 'atomic request PSN not match ePSN'
+# RoCE write zero and ack
+roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
+write_zero_req = BTH(roce_bytes)
+write_zero_req.show()
+assert write_zero_req[BTH].psn == src_epsn + 1, 'write request PSN not match ePSN'
+write_zero_resp_bth = BTH(
+    opcode = RC.ACKNOWLEDGE,
+    psn = write_zero_req[BTH].psn,
+    dqpn = dst_qpn,
+)
+write_zero_resp = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_zero_resp_bth/AETH(code='ACK', value=31, msn=1)
+write_zero_resp.show()
+send(write_zero_resp) # This response will implicitely NAK both atomic and write operation
+
+# RoCE atomic retry
+roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
+atomic_req = BTH(roce_bytes)
+atomic_req.show()
+assert atomic_req[BTH].psn == src_epsn, 'atomic request PSN not match ePSN'
+# RoCE write zero retry
+roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
+write_zero_req = BTH(roce_bytes)
+write_zero_req.show()
+assert write_zero_req[BTH].psn == src_epsn + 1, 'write request PSN not match ePSN'
+# RoCE ack to atomic
 atomic_ack_bth = BTH(
     opcode = RC.ATOMIC_ACKNOWLEDGE,
     psn = atomic_req[BTH].psn,
@@ -268,22 +362,27 @@ atomic_ack_bth = BTH(
 )
 atomic_ack = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/atomic_ack_bth/AETH(code='ACK', value=31, msn=1)/AtomicAckETH(orig=0)
 atomic_ack.show()
-send(atomic_ack)
-src_epsn += 1
+send(atomic_ack) # This response will explicitly ACK atomic operation
+send(write_zero_resp) # This response will explicitly ACK write operation
+
+src_epsn += 2
 
 ###############################################################################
-# Case 7: server write with imm to client and RNR retry the last write request
+# Case 7: server write with imm to client and retry the last write request due to RNR NAK
 ###############################################################################
+
+case_no += 1
+print(f'Case {case_no} start...')
 
 # Exchange write imm size
 write_size = MSG_SIZE
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-udp_sock.sendto(struct.pack('<iq', WriteSize, write_size), peer_addr)
-print(struct.unpack('<iq', exch_data))
+udp_sock.sendto(struct.pack('<iq', WriteImmSize, write_size), peer_addr)
+#print(struct.unpack('<iq', exch_data))
 
 # RoCE write imm, rnr retry and ack
 write_req_pkt_num = math.ceil(write_size / PMTU) if write_size > 0 else 1
-print(f'write request packet num={write_req_pkt_num}')
+#print(f'write request packet num={write_req_pkt_num}')
 for i in range(write_req_pkt_num):
     roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
     write_req = BTH(roce_bytes)
@@ -315,16 +414,19 @@ send(write_resp)
 src_epsn += write_req_pkt_num
 
 ###############################################################################
-# Case 8: server send to client without requesting ACK
+# Case 8: server send to client without requesting ACK and retry due to NAK RNR
 ###############################################################################
+
+case_no += 1
+print(f'Case {case_no} start...')
 
 # Exchange send size and rnr nak
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack('<iq', SendSize, -1), peer_addr)
 parsed_fields = struct.unpack('<iq', exch_data)
 _, send_size = parsed_fields
-print(f'send_size={send_size}')
-print(parsed_fields)
+#print(f'send_size={send_size}')
+#print(parsed_fields)
 
 # RoCE send and rnr retry without ack
 send_pkt_num = math.ceil(send_size / PMTU) if send_size > 0 else 1
@@ -359,6 +461,9 @@ src_epsn += send_pkt_num
 # Case 9: server read from client with retried request due to NAK sequence error
 ###############################################################################
 
+case_no += 1
+print(f'Case {case_no} start...')
+
 # Exchange read size
 read_str = 'RDMA_Read_Operation'
 read_size = MSG_SIZE # len(read_str) #
@@ -366,7 +471,7 @@ exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack('<iq', ReadSize, read_size), peer_addr)
 parsed_fields = struct.unpack('<iq', exch_data)
 _, read_size = parsed_fields
-print(parsed_fields)
+#print(parsed_fields)
 
 # RoCE read, nak seq retry and ack
 roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
@@ -476,152 +581,35 @@ else:
     send(read_resp)
 src_epsn += read_resp_pkt_num
 
-# Exchange write done
+###############################################################################
+# Case 10: server send with inv and atomic to client and retry due to timeout
+###############################################################################
+
+case_no += 1
+print(f'Case {case_no} start...')
+
+# Exchange send size
+send_size = MSG_SIZE
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-udp_sock.sendto(struct.pack('<i', WriteDone), peer_addr)
-parsed_fields = struct.unpack('<i', exch_data)
-print(parsed_fields)
+udp_sock.sendto(struct.pack('<iq', SendInv, send_size), peer_addr)
+#print(struct.unpack('<iq', exch_data))
 
-exit()
-
-# Exchange read size
-exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-udp_sock.sendto(struct.pack('<iq', ReadSize, -1), peer_addr)
-parsed_fields = struct.unpack('<iq', exch_data)
-_, read_size = parsed_fields
-print(parsed_fields)
-
-# RoCE read and ack
-read_resp_pkt_num = math.ceil(read_size / PMTU)
-read_bth = BTH(
-    opcode = RC.RDMA_READ_REQUEST,
-    psn = src_cpsn,
-    dqpn = dst_qpn,
-)
-read_reth = RETH(va=dst_va, rkey=dst_rkey, dlen=read_size)
-read_req = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/read_bth/read_reth
-read_req.show()
-send(read_req)
-src_npsn = src_cpsn + read_resp_pkt_num
-ans = []
-for i in range(read_resp_pkt_num):
-    roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
-    read_resp = BTH(roce_bytes)
-    ans.append(read_resp)
-    read_resp.show()
-#ans, unans = sr(read_req, multi=True, timeout=1)
-#assert len(ans) == 1, 'should receive 1 read response packet'
-#read_resp = ans[0].answer
-#read_resp.show()
-assert read_resp.psn == src_npsn - 1, 'read response PSN not match'
-src_cpsn = src_npsn
-
-# Exchange write size
-write_str = 'RDMA_Write_Operation'
-write_size = MSG_SIZE # len(write_str)
-exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-udp_sock.sendto(struct.pack('<iq', WriteSize, write_size), peer_addr)
-parsed_fields = struct.unpack('<iq', exch_data)
-print(parsed_fields)
-
-# RoCE write and ack
-write_reth = RETH(va=dst_va, rkey=dst_rkey, dlen=write_size)
-if write_size <= PMTU:
-    write_bth = BTH(
-        opcode = RC.RDMA_WRITE_ONLY,
-        psn = src_cpsn,
-        dqpn = dst_qpn,
-        ackreq = True,
-    )
-    write_data = struct.pack(f'<{write_size}s', bytearray(write_str, 'ascii'))
-    write_req = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_bth/write_reth/Raw(load=write_data)
-    write_req.show()
-    send(write_req)
-    src_npsn = src_cpsn + 1
-else:
-    write_req_pkt_num = math.ceil(write_size / PMTU)
-    write_bth = BTH(
-        opcode = RC.RDMA_WRITE_FIRST,
-        psn = src_cpsn,
-        dqpn = dst_qpn,
-        ackreq = False,
-    )
-    write_data = struct.pack(f'<{PMTU}s', bytearray(write_str, 'ascii'))
-    write_req = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_bth/write_reth/Raw(load=write_data)
-    write_req.show()
-    send(write_req)
-
-    write_req_mid_pkt_num = write_req_pkt_num - 2
-    for i in range(write_req_mid_pkt_num):
-        write_bth = BTH(
-            opcode = RC.RDMA_WRITE_MIDDLE,
-            psn = src_cpsn + i + 1,
-            dqpn = dst_qpn,
-            ackreq = False,
-        )
-        write_data = struct.pack(f'<{PMTU}s', bytearray(write_str, 'ascii'))
-        write_req = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_bth/Raw(load=write_data)
-        write_req.show()
-        send(write_req)
-
-    last_write_size = write_size % PMTU
-    write_bth = BTH(
-        opcode = RC.RDMA_WRITE_LAST,
-        psn = src_cpsn + write_req_mid_pkt_num + 1,
-        dqpn = dst_qpn,
-        ackreq = True,
-    )
-    write_data = struct.pack(f'<{last_write_size}s', bytearray(write_str, 'ascii'))
-    write_req = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_bth/Raw(load=write_data)
-    write_req.show()
-    send(write_req)
-    src_npsn = src_cpsn + write_req_pkt_num
-roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
-write_resp = BTH(roce_bytes)
-#write_resp = sr1(write_req, timeout=1)
-#ans, unans = sr(write_req, multi=False, timeout=1) # retry=-2
-#assert len(ans) == 1, 'should receive 1 write response packet'
-#write_resp = ans[0].answer
-write_resp.show()
-assert write_resp.psn == src_npsn - 1, 'write response PSN not match'
-src_cpsn = src_npsn
-
-# Exchange write imm
-exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-udp_sock.sendto(struct.pack('<i', WriteImm), peer_addr)
-parsed_fields = struct.unpack('<i', exch_data)
-print(parsed_fields)
-
-# RoCE write with imm and ack
-roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
-write_imm_req = BTH(roce_bytes)
-assert write_imm_req.psn == src_epsn, 'write imm requst not match epsn'
-write_imm_req.show()
-write_imm_resp_bth = BTH(
-    opcode = RC.ACKNOWLEDGE,
-    psn = src_epsn,
-    dqpn = dst_qpn,
-)
-write_imm_resp = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/write_imm_resp_bth/AETH(code='ACK', value=31, msn=1)
-send(write_imm_resp)
-src_epsn += 1
-
-# Exchange write done
-exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-udp_sock.sendto(struct.pack('<i', WriteDone), peer_addr)
-parsed_fields = struct.unpack('<i', exch_data)
-print(parsed_fields)
-
-# Exchange atomic ready
-exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-udp_sock.sendto(struct.pack('<i', AtomicReady), peer_addr)
-print(struct.unpack('<i', exch_data))
-# RoCE atomic and ack
+# RoCE atomic
 roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
 atomic_req = BTH(roce_bytes)
-#roce_pkts = sniff(filter=f'udp port {ROCE_PORT}', count=1)
-#atomic_req = roce_pkts[0]
 atomic_req.show()
+assert atomic_req[BTH].psn == src_epsn, 'atomic request PSN not match ePSN'
+# RoCE atomic timeout retry
+roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
+atomic_req = BTH(roce_bytes)
+atomic_req.show()
+assert atomic_req[BTH].psn == src_epsn, 'atomic request PSN not match ePSN'
+# RoCE send with inv
+roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
+send_inv_req = BTH(roce_bytes)
+send_inv_req.show()
+assert send_inv_req.psn == src_epsn + 1, 'send request PSN not match ePSN'
+# RoCE ack to atomic
 atomic_ack_bth = BTH(
     opcode = RC.ATOMIC_ACKNOWLEDGE,
     psn = atomic_req[BTH].psn,
@@ -630,10 +618,22 @@ atomic_ack_bth = BTH(
 atomic_ack = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/atomic_ack_bth/AETH(code='ACK', value=31, msn=1)/AtomicAckETH(orig=0)
 atomic_ack.show()
 send(atomic_ack)
-# Exchange atomic done
+# RoCE ack to send with inv
+send_inv_ack_bth = BTH(
+    opcode = RC.ACKNOWLEDGE,
+    psn = send_inv_req[BTH].psn,
+    dqpn = dst_qpn,
+)
+send_inv_ack = IP(dst=arg_res.dst_ip)/UDP(dport=ROCE_PORT, sport=ROCE_PORT)/send_inv_ack_bth/AETH(code='ACK', value=31, msn=1)
+send_inv_ack.show()
+send(send_inv_ack)
+src_epsn += 2
+
+# Exchange send done
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-udp_sock.sendto(struct.pack('<i', AtomicDone), peer_addr)
-print(struct.unpack('<i', exch_data))
+udp_sock.sendto(struct.pack('<i', SendDone), peer_addr)
+parsed_fields = struct.unpack('<i', exch_data)
+#print(parsed_fields)
 
 udp_sock.close()
 roce_sock.close()

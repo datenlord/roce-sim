@@ -17,6 +17,8 @@ CREDIT_CNT_INVALID = 31
 DEFAULT_PKEY = 0xFFFF
 DEFAULT_RNR_WAIT_TIME = 4
 DEFAULT_TIMEOUT = 4
+EMPTY_SEND_FLAG = 0
+EMPTY_WC_FLAG = 0
 ROCE_PORT = 4791
 
 MAX_SSN = 2**24
@@ -125,6 +127,144 @@ class Util:
             yield cur_psn
             cur_psn = Util.next_psn(cur_psn)
 
+    def rnr_timer_to_ns(rnr_timer):
+        if rnr_timer == 0:
+            timer_ns = 655_360_000
+        elif rnr_timer == 1:
+            timer_ns = 10_000
+        elif rnr_timer == 2:
+            timer_ns = 20_000
+        elif rnr_timer == 3:
+            timer_ns = 30_000
+        elif rnr_timer == 4:
+            timer_ns = 40_000
+        elif rnr_timer == 5:
+            timer_ns = 60_000
+        elif rnr_timer == 6:
+            timer_ns = 80_000
+        elif rnr_timer == 7:
+            timer_ns = 120_000
+        elif rnr_timer == 8:
+            timer_ns = 160_000
+        elif rnr_timer == 9:
+            timer_ns = 240_000
+        elif rnr_timer == 10:
+            timer_ns = 320_000
+        elif rnr_timer == 11:
+            timer_ns = 480_000
+        elif rnr_timer == 12:
+            timer_ns = 640_000
+        elif rnr_timer == 13:
+            timer_ns = 960_000
+        elif rnr_timer == 14:
+            timer_ns = 1_280_000
+        elif rnr_timer == 15:
+            timer_ns = 1_920_000
+        elif rnr_timer == 16:
+            timer_ns = 2_560_000
+        elif rnr_timer == 17:
+            timer_ns = 3_840_000
+        elif rnr_timer == 18:
+            timer_ns = 5_120_000
+        elif rnr_timer == 19:
+            timer_ns = 7_680_000
+        elif rnr_timer == 20:
+            timer_ns = 10_240_000
+        elif rnr_timer == 21:
+            timer_ns = 15_360_000
+        elif rnr_timer == 22:
+            timer_ns = 20_480_000
+        elif rnr_timer == 23:
+            timer_ns = 30_720_000
+        elif rnr_timer == 24:
+            timer_ns = 40_960_000
+        elif rnr_timer == 25:
+            timer_ns = 61_440_000
+        elif rnr_timer == 26:
+            timer_ns = 81_920_000
+        elif rnr_timer == 27:
+            timer_ns = 122_880_000
+        elif rnr_timer == 28:
+            timer_ns = 163_840_000
+        elif rnr_timer == 29:
+            timer_ns = 245_760_000
+        elif rnr_timer == 30:
+            timer_ns = 327_680_000
+        elif rnr_timer == 31:
+            timer_ns = 491_520_000
+        else:
+            raise Exception(f'unsupported RNR timer value={rnr_timer}')
+        return timer_ns
+
+    def timeout_to_ns(timeout_val):
+        if timeout_val == 0:
+            timeout_ns = -1
+        elif timeout_val == 1:
+            timeout_ns = 8192
+        elif timeout_val == 2:
+            timeout_ns == 16_384
+        elif timeout_val == 3:
+            timeout_ns = 32_768
+        elif timeout_val == 4:
+            timeout_ns = 65_536
+        elif timeout_val == 5:
+            timeout_ns = 131_072
+        elif timeout_val == 6:
+            timeout_ns = 262_144
+        elif timeout_val == 7:
+            timeout_ns = 524_288
+        elif timeout_val == 8:
+            timeout_ns = 1_048_576
+        elif timeout_val == 9:
+            timeout_ns = 2_097_152
+        elif timeout_val == 10:
+            timeout_ns = 4_196_304
+        elif timeout_val == 11:
+            timeout_ns = 8_388_608
+        elif timeout_val == 12:
+            timeout_ns = 16_777_220
+        elif timeout_val == 13:
+            timeout_ns = 33_554_430
+        elif timeout_val == 14:
+            timeout_ns = 67_108_860
+        elif timeout_val == 15:
+            timeout_ns = 134_217_700
+        elif timeout_val == 16:
+            timeout_ns = 268_435_500
+        elif timeout_val == 17:
+            timeout_ns = 536_870_900
+        elif timeout_val == 18:
+            timeout_ns = 1_073_742_000
+        elif timeout_val == 19:
+            timeout_ns = 2_147_484_000
+        elif timeout_val == 20:
+            timeout_ns = 4_294_967_000
+        elif timeout_val == 21:
+            timeout_ns = 8_589_935_000
+        elif timeout_val == 22:
+            timeout_ns = 17_179_869_000
+        elif timeout_val == 23:
+            timeout_ns = 34_359_738_000
+        elif timeout_val == 24:
+            timeout_ns = 68_719_477_000
+        elif timeout_val == 25:
+            timeout_ns = 137_000_000_000
+        elif timeout_val == 26:
+            timeout_ns = 275_000_000_000
+        elif timeout_val == 27:
+            timeout_ns = 550_000_000_000
+        elif timeout_val == 28:
+            timeout_ns = 1_100_000_000_000
+        elif timeout_val == 29:
+            timeout_ns = 2_200_000_000_000
+        elif timeout_val == 30:
+            timeout_ns = 4_400_000_000_000
+        elif timeout_val == 31:
+            timeout_ns = 8_800_000_000_000
+        else:
+            raise Exception(f'unsupported timeout value={timeout_ns}')
+        return timeout_ns
+
 class MR:
     def __init__(self, va, length, access_flags, lkey, rkey):
         #assert ACCESS_FLAGS.ZERO_BASED & access_flags, 'only zero-based address supported'
@@ -166,10 +306,6 @@ class MR:
         addr_in_mr = addr if ACCESS_FLAGS.ZERO_BASED & self.flags() else addr - self.addr()
         assert addr_in_mr >= 0 and addr_in_mr + size <= self.len(), 'read address and size not within MR'
         return self.byte_data[addr_in_mr: (addr_in_mr + size)]
-
-    # def read_all(self):
-    #     assert len(self.byte_data) == self.len()
-    #     return self.byte_data
 
 class PD:
     def __init__(self, pdn):
@@ -317,7 +453,7 @@ class SG:
 class SendWR:
     def __init__(self, opcode, sgl,
         wr_id = None,
-        send_flags = DEFAULT_FLAG,
+        send_flags = EMPTY_SEND_FLAG,
         rmt_va = None,
         rkey = None,
         compare_add = None,
@@ -428,11 +564,12 @@ class SQ:
         self.use_ipv6 = use_ipv6
         self.req_pkt_dict = {}
         self.send_wqe_dict = {}
-        #self.oldest_psn = sq_psn
-        self.min_unacked_psn = sq_psn
+        #self.oldest_psn = sq_psn # TODO: handle oldest_psn
+        self.min_unacked_psn = self.sq_psn
 
         self.cur_read_resp_ctx = None
-        self.rnr_wait = False
+        self.oldest_sent_ts_ns = None # Keep track of the oldest sent packet
+        self.pending_rd_atomic_wr_num = 0
 
     def modify(self,
         qps = None,
@@ -450,33 +587,34 @@ class SQ:
         retry_cnt = None,
         rnr_rery = None,
     ):
-        if qps:
+        if qps is not None:
             self.qps = qps
-        if pmtu:
+        if pmtu is not None:
             self.pmtu = pmtu
-        if sq_psn:
+        if sq_psn is not None:
             self.sq_psn = sq_psn % MAX_PSN
-        if dgid:
+            self.min_unacked_psn = self.sq_psn # min_unacked_psn should be updated each time sq_psn updated
+        if dgid is not None:
             self.dgid = dgid
-        if dst_qpn:
+        if dst_qpn is not None:
             self.dst_qpn = dst_qpn # qpn in number instread of hex string
-        if access_flags:
+        if access_flags is not None:
             self.access_flags = access_flags
-        if pkey:
+        if pkey is not None:
             self.pkey = pkey
-        if sq_draining:
+        if sq_draining is not None:
             self.sq_draining = sq_draining
-        if max_rd_atomic:
+        if max_rd_atomic is not None:
             self.max_rd_atomic = max_rd_atomic
-        if max_dest_rd_atomic:
+        if max_dest_rd_atomic is not None:
             self.max_dest_rd_atomic = max_dest_rd_atomic
-        if min_rnr_timer:
+        if min_rnr_timer is not None:
             self.min_rnr_timer = min_rnr_timer
-        if timeout:
+        if timeout is not None:
             self.timeout = timeout
-        if retry_cnt:
+        if retry_cnt is not None:
             self.retry_cnt = retry_cnt
-        if rnr_rery:
+        if rnr_rery is not None:
             self.rnr_rery = rnr_rery
 
     def push(self, wr):
@@ -533,7 +671,7 @@ class SQ:
 
     def handle_dup_or_illegal_resp(self, resp):
         if self.min_unacked_psn == self.sq_psn: # No response expected
-            logging.debug(f'SQ={self.sqpn()} received ghost response: ' + resp.show(dump = True))
+            logging.info(f'SQ={self.sqpn()} received ghost response: ' + resp.show(dump = True))
         else: # SQ discard duplicate or illegal response, except for unsolicited flow control credit
             psn_comp_res = Util.psn_compare(resp[BTH].psn, self.min_unacked_psn, self.sq_psn)
             assert psn_comp_res != 0, 'should handle duplicate or illegal response'
@@ -554,18 +692,47 @@ class SQ:
             raise Exception(f'SQ={self.sqpn()} has no destination QPN')
         elif not self.dgid:
             raise Exception(f'SQ={self.sqpn()} has no destination GID')
+        self.check_timeout_and_retry() # Check request timeout and retry if any
 
-        sr, cssn = self.pop()
-        if WR_OPCODE.send(sr.op()):
-            self.process_send_req(sr, cssn)
-        elif WR_OPCODE.write(sr.op()):
-            self.process_write_req(sr, cssn)
-        elif WR_OPCODE.RDMA_READ == sr.opcode:
-            self.process_read_req(sr, cssn)
-        elif WR_OPCODE.atomic(sr.op()):
-            self.process_atomic_req(sr, cssn)
+        if self.pending_rd_atomic_wr_num < self.max_dest_rd_atomic:
+            sr, cssn = self.pop()
+            read_or_atomic = False
+            if WR_OPCODE.send(sr.op()):
+                self.process_send_req(sr, cssn)
+            elif WR_OPCODE.write(sr.op()):
+                self.process_write_req(sr, cssn)
+            elif WR_OPCODE.RDMA_READ == sr.opcode:
+                self.process_read_req(sr, cssn)
+                read_or_atomic = True
+            elif WR_OPCODE.atomic(sr.op()):
+                self.process_atomic_req(sr, cssn)
+                read_or_atomic = True
+            else:
+                raise Exception(f'SQ={self.sqpn()} met unsupported opcode: {sr.opcode}')
+
+            if read_or_atomic:
+                self.pending_rd_atomic_wr_num += 1
+            if read_or_atomic or (SEND_FLAGS.SIGNALED & sr.flags()):
+                self.update_oldest_sent_ts(ack_or_timeout = False) # Update oldest_sent_ts if is None
+            return True
         else:
-            raise Exception(f'SQ={self.sqpn()} met unsupported opcode: {sr.opcode}')
+            logging.debug(f'SQ={self.sqpn()} has sent too many requests, {self.pending_rd_atomic_wr_num} outstanding read/atomic requests')
+            return False
+
+    # There are 5 case to delete outstanding WQE:
+    # - ACK received, delete finished send or write WR
+    # - unrecoverable NAK received, delete NAK related WR
+    # - unrecoverable NAK received, QP into error state, delete all outstanding WR
+    # - read response received, delete finished read WR
+    # - atomic response received, delete finished atomic WR
+    def del_outstanding_wqe(self, ssn_to_delete):
+        wr_to_delete = self.send_wqe_dict[ssn_to_delete]
+        del self.send_wqe_dict[ssn_to_delete]
+        wr_op = wr_to_delete.op()
+        if wr_op == WR_OPCODE.RDMA_READ or WR_OPCODE.atomic(wr_op):
+            self.pending_rd_atomic_wr_num -= 1
+            assert self.pending_rd_atomic_wr_num >= 0, 'pending_rd_atomic_wr_num should not < 0'
+
 
     def send_pkt(self, cssn, req, save_pkt = True):
         cpsn = req[BTH].psn
@@ -577,10 +744,9 @@ class SQ:
         dst_ipv6 = socket.inet_ntop(socket.AF_INET6, self.dgid)
         dst_ipv4 = dst_ipv6.replace('::ffff:', '')
         dst_ip = dst_ipv6 if self.use_ipv6 else dst_ipv4
-        logging.debug(f'dest IP={dst_ip}')
 
         pkt = IP(dst=dst_ip)/UDP(dport=ROCE_PORT, sport=self.sqpn())/req
-        logging.debug(f'SQ={self.sqpn()} sent out request: ' + pkt.show(dump = True))
+        logging.debug(f'SQ={self.sqpn()} sent to IP={dst_ip} a request: ' + pkt.show(dump = True))
         send(pkt)
 
     def process_send_req(self, sr, cssn):
@@ -756,6 +922,9 @@ class SQ:
         )
         read_reth = RETH(va = sr.raddr(), rkey = sr.rkey(), dlen = read_size)
         read_req = read_bth/read_reth
+        # Read request will be saved in self.sent_pkt_dict, and if read has multiple responses,
+        # the returned read response have PSN > the PSN of the read request, therefore,
+        # read responses might not find the read request in self.sent_pkt_dict via response PSN.
         self.send_pkt(cssn, read_req)
         self.sq_psn = (self.sq_psn + read_resp_pkt_num) % MAX_PSN
 
@@ -783,31 +952,38 @@ class SQ:
         self.send_pkt(cssn, atomic_req)
         self.sq_psn = (self.sq_psn + 1) % MAX_PSN
 
-    def handle_normal_resp(self, resp):
+    def handle_expected_resp(self, resp):
+        rc_op = resp[BTH].opcode
         assert resp[BTH].dqpn == self.qpn, 'QPN not match with ACK packet'
         assert self.is_expected_resp(resp[BTH].psn), 'should expect valid response, not duplicate or illegal one'
-        col_ack_res, psn_begin_retry = self.coalesce_ack(resp[BTH].psn)
-        self.min_unacked_psn = psn_begin_retry
+        col_ack_res, psn_begin_retry, implicit_ack_pkt_num = self.coalesce_ack(resp[BTH].psn)
+
         if not col_ack_res: # There are read or atomic requests being implicitly NAK'd, should retry
-            logging.debug(f'SQ={self.sqpn()} has implicit ACK-ed packtes, needs to retry from PSN={psn_begin_retry}')
-            self.min_unacked_psn = psn_begin_retry
+            logging.info(f'SQ={self.sqpn()} has implicit ACK-ed packtes, needs to retry from PSN={psn_begin_retry}')
+            assert self.min_unacked_psn == psn_begin_retry, 'coalesce_ack() should have update min_unacked_psn to psn_begin_retry'
+            if rc_op == RC.ACKNOWLEDGE:
+                assert resp[AETH].code == 0, 'only ACK can have implicit NAK, NAK cannot be nested'
             self.retry(psn_begin_retry)
         else:
-            update_min_unacked_psn = None
-            rc_op = resp[BTH].opcode
+            need_update_min_unacked_psn = False
             if RC.read_resp(rc_op):
-                update_min_unacked_psn = self.handle_read_resp(resp)
+                need_update_min_unacked_psn = self.handle_read_resp(resp)
             elif rc_op == RC.ATOMIC_ACKNOWLEDGE:
-                update_min_unacked_psn = self.handle_atomic_ack(resp)
+                need_update_min_unacked_psn = self.handle_atomic_ack(resp)
             elif rc_op == RC.ACKNOWLEDGE:
-                update_min_unacked_psn = self.handle_ack(resp)
+                need_update_min_unacked_psn = self.handle_ack(resp)
             else:
                 raise Exception(f'unsupported response opcode={rc_op}')
+            if need_update_min_unacked_psn: # ACK received, update min_unacked_psn
+                self.update_min_unacked_psn(Util.next_psn(resp[BTH].psn))
 
-            if update_min_unacked_psn:
-                self.min_unacked_psn = Util.next_psn(resp[BTH].psn) # TODO: delete acked request packets
-        logging.debug(f'min unacked PSN={self.min_unacked_psn}, next PSN={self.sq_psn}')
+        self.update_oldest_sent_ts(ack_or_timeout = True) # Update oldest_sent_ts when ACK or NAK received
+        logging.debug(f'min unacked PSN={self.min_unacked_psn}, next PSN={self.sq_psn}, implicit_ack_pkt_num={implicit_ack_pkt_num}, pending_rd_atomic_wr_num={self.pending_rd_atomic_wr_num}')
 
+    # There are 3 cases to retry:
+    # RNR NAK received, just retry the whole request of the specified PSN
+    # NAK seq err received, retry all requests after the specified PSN
+    # timeout detected, retry all requests after min_unacked_psn
     def retry(self, psn_begin_retry, psn_end_retry = None):
         if psn_end_retry is None:
             # Retry packet with PSN from psn_begin_retry to psn_end_retry (not included)
@@ -845,22 +1021,53 @@ class SQ:
                 length = send_or_write_wr.len(),
                 qpn = self.sqpn(),
                 src_qp = self.dqpn(),
-                wc_flags = 0, # Requester side CQE no need to handle IBV_WC_WITH_IMM or IBV_WC_WITH_INV
+                wc_flags = EMPTY_WC_FLAG, # Requester side CQE no need to handle IBV_WC_WITH_IMM or IBV_WC_WITH_INV
             )
             # No need to retire top RQ element since this is request side, no RQ logic involved
             self.cq.push(cqe)
-            # Delete completed send WR
-            del self.send_wqe_dict[pending_wr_ssn]
+            # Delete completed send or write WR
+            self.del_outstanding_wqe(pending_wr_ssn)
         return True
+
+    def check_timeout_and_retry(self):
+        if self.oldest_sent_ts_ns is not None:
+            cur_ts_ns = time.time_ns()
+            timeout_ns = Util.timeout_to_ns(self.timeout)
+            if self.oldest_sent_ts_ns + timeout_ns < cur_ts_ns:
+                assert self.min_unacked_psn < self.sq_psn, 'when timeout there should have outstanding requests'
+                logging.info(f'SQ={self.sqpn()} detected timeout and retry from PSN={self.min_unacked_psn} to PSN={self.sq_psn} (not included)')
+                self.retry(psn_begin_retry = self.min_unacked_psn)
+                self.update_oldest_sent_ts(ack_or_timeout = True) # Update oldest_sent_ts when timeout retry
+
+    # oldest_sent_ts_ns is updated in 3 cases:
+    # - ACK or NAK received
+    # - timeout detected and retry
+    # - oldest_sent_ts_ns is None and there's new packet to send
+    def update_oldest_sent_ts(self, ack_or_timeout = False):
+        if ack_or_timeout or self.oldest_sent_ts_ns is None:
+            if self.min_unacked_psn != self.sq_psn: # There are unacked requests
+                self.oldest_sent_ts_ns = time.time_ns()
+            else:
+                self.oldest_sent_ts_ns = None # No outstanding request
+
+    # min_unacked_psn is updated in 2 cases:
+    # - explicit ACK received
+    # - implicit ACK
+    def update_min_unacked_psn(self, min_unacked_psn): # TODO: delete acked request packets
+        if self.min_unacked_psn != min_unacked_psn:
+            self.min_unacked_psn = min_unacked_psn
 
     def coalesce_ack(self, psn_upper_limit): # psn_upper_limit not included
         assert Util.psn_compare(self.min_unacked_psn, psn_upper_limit, self.sq_psn) <= 0, 'min_unacked_psn shoud <= psn_upper_limit'
-        cur_psn = self.min_unacked_psn
+        implicit_ack_pkt_num = 0
         for unacked_psn in Util.psn_range(self.min_unacked_psn, psn_upper_limit):
             ack_res = self.ack_send_or_write_req(unacked_psn)
             if not ack_res: # unacked_psn is either read or atomic request, coalesce ack should stop
-                return (False, unacked_psk) # coalesce_ack enountered implicit NAK
-        return (True, psn_upper_limit) # coalesce_ack success
+                self.update_min_unacked_psn(min_unacked_psn = unacked_psn)
+                return (False, unacked_psn, implicit_ack_pkt_num) # coalesce_ack enountered implicit NAK
+            implicit_ack_pkt_num += 1
+        self.update_min_unacked_psn(min_unacked_psn = psn_upper_limit)
+        return (True, psn_upper_limit, implicit_ack_pkt_num) # coalesce_ack success
 
     def handle_ack(self, ack):
         assert ack[BTH].opcode == RC.ACKNOWLEDGE, 'should be ack response'
@@ -872,9 +1079,10 @@ class SQ:
             return True # ACK should update unacked_min_psn
         elif ack[AETH].code == 3 and ack[AETH].value in [1, 2, 3]: # NAK invalid request / remote access / remote operation error, no retry
             self.qps = QPS.ERR
-            self.coalesce_ack(ack[BTH].psn)
+            #self.coalesce_ack(ack[BTH].psn)
+
             # Explicitly NAK corresponding request
-            nak_psn, nak_ssn = self.req_pkt_dict[ack[BTH].psn]
+            nak_pkt, nak_ssn = self.req_pkt_dict[ack[BTH].psn]
             nak_sr = self.send_wqe_dict[nak_ssn]
             nak_cqe = CQE(
                 wr_id = nak_sr.id(),
@@ -883,10 +1091,10 @@ class SQ:
                 length = nak_sr.len(),
                 qpn = self.sqpn(),
                 src_qp = self.dqpn(),
-                wc_flags = 0,
+                wc_flags = EMPTY_WC_FLAG,
             )
             self.cq.push(nak_cqe)
-            del self.send_wqe_dict[nak_psn]
+            self.del_outstanding_wqe(nak_ssn) # Delete the NAK specified WR
 
             # All pending processing send WR will be completed with flush in error
             # Since current implementation is single-thread, this case does not matter
@@ -899,10 +1107,11 @@ class SQ:
                     length = nak_sr.len(),
                     qpn = self.sqpn(),
                     src_qp = self.dqpn(),
-                    wc_flags = 0,
+                    wc_flags = EMPTY_WC_FLAG,
                 )
                 self.cq.push(flush_pending_cqe)
-            self.send_wqe_dict.clear()
+                self.del_outstanding_wqe(pending_ssn) # Delete all pending WR
+            #self.send_wqe_dict.clear()
 
             # All submitted WR in SQ will be completed with flush in error
             while not self.empty():
@@ -914,16 +1123,21 @@ class SQ:
                     length = flush_sr.len(),
                     qpn = self.sqpn(),
                     src_qp = self.dqpn(),
-                    wc_flags = 0,
+                    wc_flags = EMPTY_WC_FLAG,
                 )
                 self.cq.push(flush_cqe)
         elif ack[AETH].code == 1: # RNR NAK, should retry
             rnr_psn = ack[BTH].psn
-            rnr_wait_time = ack[AETH].value if ack[AETH].value >= self.min_rnr_timer else self.min_rnr_timer
-            logging.debug(f'SQ={self.sqpn()} received RNR NAK with PSN={rnr_psn} and wait time={rnr_wait_time}')
-            self.rnr_wait = True
-            # time.sleep(rnr_wait_time) # TODO: handle RNR wait time
-            self.rnr_wait = False
+            rnr_wait_timer = ack[AETH].value
+            if self.min_rnr_timer == 0:
+                rnr_wait_timer = self.min_rnr_timer # 0 represents the largest RNR timer 655.36ms
+            elif self.min_rnr_timer > ack[AETH].value:
+                self.min_rnr_timer # Choose the larger RNR timer
+            logging.debug(f'SQ={self.sqpn()} received RNR NAK with PSN={rnr_psn} and wait time={rnr_wait_timer}, min_rnr_timer={self.min_rnr_timer}')
+            # Handle RNR NAK wait time
+            wait_time_secs = Util.rnr_timer_to_ns(rnr_wait_timer) / 1_000_000_000
+            time.sleep(wait_time_secs) # Wait the time specified by rnr_wait_timer before retry
+
             assert rnr_psn in self.req_pkt_dict, 'the PSN of RNR NAK should be of a request sent by SQ and saved in req_pkt_dict'
             rnr_pkt, rnr_wr_ssn = self.req_pkt_dict[rnr_psn]
             rc_op = rnr_pkt[BTH].opcode
@@ -980,7 +1194,7 @@ class SQ:
                 seq_err_psn = (seq_err_psn + remaining_read_resp_pkt_num) % MAX_PSN
             self.retry(seq_err_psn) # retry remaining request if any
         else:
-            logging.debug('received reserved AETH code or reserved AETH NAK value or unsported AETH NAK value: ' + ask.show(dump = True))
+            logging.info('received reserved AETH code or reserved AETH NAK value or unsported AETH NAK value: ' + ask.show(dump = True))
         return False # No ACK-ed packet, do not update unacked_min_psn
 
     def handle_read_resp(self, read_resp):
@@ -1015,7 +1229,7 @@ class SQ:
                         orig_read_req_psn = read_req_psn,
                     )
                 else:
-                    logging.debug(f'read request of PSN={self.cur_read_resp_ctx.orig_read_req_psn} is retried, the retried read request PSN={read_req_psn}')
+                    logging.debug(f'original read request of PSN={self.cur_read_resp_ctx.orig_read_req_psn} is retried, the retried read request PSN={read_req_psn}')
 
         read_mr = self.cur_read_resp_ctx.read_mr
         read_dlen = self.cur_read_resp_ctx.read_dlen
@@ -1042,12 +1256,12 @@ class SQ:
                 length = read_dlen,
                 qpn = self.sqpn(),
                 src_qp = self.dqpn(),
-                wc_flags = 0,
+                wc_flags = EMPTY_WC_FLAG,
             )
             # No need to retire top RQ element since this is requester side, no RQ logic involved
             self.cq.push(read_cqe)
             # Delete completed read WR
-            del self.send_wqe_dict[read_ssn]
+            self.del_outstanding_wqe(read_ssn)
         return True # Should update unacked_min_psn
 
     def handle_atomic_ack(self, atomic_ack):
@@ -1074,12 +1288,12 @@ class SQ:
             length = ATOMIC_BYTE_SIZE,
             qpn = self.sqpn(),
             src_qp = self.dqpn(),
-            wc_flags = 0,
+            wc_flags = EMPTY_WC_FLAG,
         )
         # No need to retire top RQ element since this is request side, no RQ logic involved
         self.cq.push(atomic_cqe)
         # Delete completed atomic WR
-        del self.send_wqe_dict[atomic_wr_ssn]
+        self.del_outstanding_wqe(atomic_wr_ssn)
         return True # Should update unacked_min_psn
 
 class RQ:
@@ -1120,6 +1334,9 @@ class RQ:
         self.cur_send_req_ctx = None
         self.cur_write_req_ctx = None
 
+        self.rnr_nak_wait_clear_ts_ns = 0
+        self.nak_seq_err_clear = True
+
     def modify(self,
         qps = None,
         pmtu = None,
@@ -1136,33 +1353,33 @@ class RQ:
         retry_cnt = None,
         rnr_rery = None,
     ):
-        if qps:
+        if qps is not None:
             self.qps = qps
-        if pmtu:
+        if pmtu is not None:
             self.pmtu = pmtu
-        if rq_psn:
+        if rq_psn is not None:
             self.rq_psn = rq_psn % MAX_PSN
-        if dgid:
+        if dgid is not None:
             self.dgid = dgid
-        if dst_qpn:
+        if dst_qpn is not None:
             self.dst_qpn = dst_qpn # qpn in number instread of hex string
-        if access_flags:
+        if access_flags is not None:
             self.access_flags = access_flags
-        if pkey:
+        if pkey is not None:
             self.pkey = pkey
-        if sq_draining:
+        if sq_draining is not None:
             self.sq_draining = sq_draining
-        if max_rd_atomic:
+        if max_rd_atomic is not None:
             self.max_rd_atomic = max_rd_atomic
-        if max_dest_rd_atomic:
+        if max_dest_rd_atomic is not None:
             self.max_dest_rd_atomic = max_dest_rd_atomic
-        if min_rnr_timer:
+        if min_rnr_timer is not None:
             self.min_rnr_timer = min_rnr_timer
-        if timeout:
+        if timeout is not None:
             self.timeout = timeout
-        if retry_cnt:
+        if retry_cnt is not None:
             self.retry_cnt = retry_cnt
-        if rnr_rery:
+        if rnr_rery is not None:
             self.rnr_rery = rnr_rery
 
     def push(self, wr):
@@ -1224,13 +1441,12 @@ class RQ:
         dst_ipv6 = socket.inet_ntop(socket.AF_INET6, self.dgid)
         dst_ipv4 = dst_ipv6.replace('::ffff:', '')
         dst_ip = dst_ipv6 if self.use_ipv6 else dst_ipv4
-        logging.debug(f'dest IP={dst_ip}')
 
         pkt = IP(dst=dst_ip)/UDP(dport=ROCE_PORT, sport=self.sqpn())/resp
         cpsn = pkt[BTH].psn
         if save_pkt:
             self.resp_pkt_dict[cpsn] = pkt
-        logging.debug(f'RQ={self.sqpn()} response: ' + pkt.show(dump = True))
+        logging.debug(f'RQ={self.sqpn()} send to IP={dst_ip} a response: ' + pkt.show(dump = True))
         send(pkt)
 
     def recv_pkt(self, pkt):
@@ -1252,6 +1468,7 @@ class RQ:
             assert Util.check_op_with_access_flags(rc_op, self.access_flags), 'received packet has opcode without proper permission'
 
             if self.is_expected_req(pkt[BTH].psn):
+                self.nak_seq_err_clear = True # RQ received request matches its ePSN and clear any previous NAK sequence error
                 if RC.send(rc_op):
                     self.handle_send_req(pkt)
                 elif RC.write(rc_op):
@@ -1268,7 +1485,7 @@ class RQ:
             self.pre_pkt_op = rc_op
         elif RC.response(rc_op):
             if self.sq.is_expected_resp(pkt[BTH].psn):
-                self.sq.handle_normal_resp(pkt)
+                self.sq.handle_expected_resp(pkt)
                 self.pre_pkt_op = rc_op
             else:
                 self.sq.handle_dup_or_illegal_resp(pkt)
@@ -1306,7 +1523,7 @@ class RQ:
             self.msn = (self.msn + 1) % MAX_MSN
             self.cur_send_req_ctx = None # Reset cur_send_req_ctx to None after receive the last or only send request
 
-            cqe_wc_flags = 0
+            cqe_wc_flags = EMPTY_WC_FLAG
             cqe_imm_data_or_inv_rkey = None
             if RC.has_imm(rc_op):
                 cqe_wc_flags |= WC_FLAGS.WITH_IMM
@@ -1506,24 +1723,34 @@ class RQ:
         self.send_pkt(ack)
 
     def process_nak_rnr(self, req):
-        rnr_nak_bth = BTH(
-            opcode = RC.ACKNOWLEDGE,
-            psn = req[BTH].psn,
-            dqpn = self.dqpn(),
-        )
-        rnr_nak_aeth = AETH(code = 'RNR', value = self.min_rnr_timer, msn = self.msn)
-        rnr_nak = rnr_nak_bth/rnr_nak_aeth
-        self.send_pkt(rnr_nak)
+        cur_ts_ns = time.time_ns()
+        if cur_ts_ns > self.rnr_nak_wait_clear_ts_ns:
+            rnr_wait_timer = self.min_rnr_timer
+            rnr_nak_bth = BTH(
+                opcode = RC.ACKNOWLEDGE,
+                psn = req[BTH].psn,
+                dqpn = self.dqpn(),
+            )
+            rnr_nak_aeth = AETH(code = 'RNR', value = rnr_wait_timer, msn = self.msn)
+            rnr_nak = rnr_nak_bth/rnr_nak_aeth
+            self.send_pkt(rnr_nak)
+            self.rnr_nak_wait_clear_ts_ns = cur_ts_ns + Util.rnr_timer_to_ns(rnr_wait_timer) # The timestamp RNR NAK wait timer to be cleared
+        else:
+            logging.info(f'RQ={self.sqpn()} already responsed a RNR NAK and its wait timer is not cleared, no RNR NAK to response again')
 
     def process_nak_seq_err(self):
-        seq_nak_bth = BTH(
-            opcode = RC.ACKNOWLEDGE,
-            psn = self.rq_psn,
-            dqpn = self.dqpn(),
-        )
-        seq_nak_aeth = AETH(code = 'NAK', value = 0, msn = self.msn)
-        seq_nak = seq_nak_bth/seq_nak_aeth
-        self.send_pkt(seq_nak)
+        if self.nak_seq_err_clear:
+            seq_nak_bth = BTH(
+                opcode = RC.ACKNOWLEDGE,
+                psn = self.rq_psn,
+                dqpn = self.dqpn(),
+            )
+            seq_nak_aeth = AETH(code = 'NAK', value = 0, msn = self.msn)
+            seq_nak = seq_nak_bth/seq_nak_aeth
+            self.send_pkt(seq_nak)
+            self.nak_seq_err_clear = False # There is a NAK seq err needs to be cleared
+        else:
+            logging.info(f'RQ={self.sqpn()} already responsed a NAK sequence error, and now it can only response to request matches its ePSN')
 
 class QP:
     def __init__(self, pd, cq, qpn, pmtu, access_flags, use_ipv6,
