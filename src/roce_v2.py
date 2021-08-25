@@ -1020,7 +1020,7 @@ class SQ:
         self.send_pkt(cssn, atomic_req)
         self.sq_psn = (self.sq_psn + 1) % MAX_PSN
 
-    def handle_expected_resp(self, resp):
+    def handle_expected_resp(self, resp, retry_handler = None):
         rc_op = resp[BTH].opcode
         assert resp[BTH].dqpn == self.qpn, 'QPN not match with ACK packet'
         assert self.is_expected_resp(resp[BTH].psn), 'should expect valid response, not duplicate or illegal one'
@@ -1031,7 +1031,7 @@ class SQ:
             assert self.min_unacked_psn == psn_begin_retry, 'coalesce_ack() should have update min_unacked_psn to psn_begin_retry'
             if rc_op == RC.ACKNOWLEDGE:
                 assert resp[AETH].code == 0, 'only ACK can have implicit NAK, NAK cannot be nested'
-            self.retry_pkts(psn_begin_retry = psn_begin_retry, retry_type = OTHER_RETRY)
+            self.retry_pkts(psn_begin_retry = psn_begin_retry, retry_type = OTHER_RETRY, retry_handler = retry_handler)
         else:
             need_update_min_unacked_psn = False
             if RC.read_resp(rc_op):
@@ -1039,7 +1039,7 @@ class SQ:
             elif rc_op == RC.ATOMIC_ACKNOWLEDGE:
                 need_update_min_unacked_psn = self.handle_atomic_ack(resp)
             elif rc_op == RC.ACKNOWLEDGE:
-                need_update_min_unacked_psn = self.handle_ack(resp)
+                need_update_min_unacked_psn = self.handle_ack(resp, retry_handler)
             else:
                 raise Exception(f'unsupported response opcode={rc_op}')
             if need_update_min_unacked_psn: # ACK received, update min_unacked_psn
@@ -1068,7 +1068,7 @@ class SQ:
         next_request_psn = (partial_read_resp_psn + remaining_read_resp_pkt_num) % MAX_PSN
         return next_request_psn
 
-    def retry_one_wr(self, ssn_to_retry, psn_begin_retry = None, retry_type = OTHER_RETRY):
+    def retry_one_wr(self, ssn_to_retry, psn_begin_retry = None, retry_type = OTHER_RETRY, retry_handler = None):
         wr_ctx = self.outstanding_wr_dict[ssn_to_retry]
         psn_end_retry = (wr_ctx.first_psn() + wr_ctx.pkt_num()) % MAX_PSN
         if psn_begin_retry is None:
@@ -1076,17 +1076,20 @@ class SQ:
         else:
             assert Util.psn_compare(wr_ctx.first_psn(), psn_begin_retry, self.sq_psn) <= 0, 'wr_ctx.first_psn() should <= retry_from_psn'
             assert Util.psn_compare(psn_begin_retry, psn_end_retry, self.sq_psn) <= 0, 'retry_from_psn should <= retry_end_psn'
-        self.retry_pkts(psn_begin_retry = psn_begin_retry, psn_end_retry = psn_end_retry, retry_type = retry_type)
+        self.retry_pkts(psn_begin_retry = psn_begin_retry, psn_end_retry = psn_end_retry, retry_type = retry_type, retry_handler = retry_handler)
 
     # There are 4 cases to retry:
     # RNR NAK received, retry the whole send request (maybe multiple packets) or a single request packet of the specified PSN
     # NAK seq err received, retry all requests after the specified PSN
     # timeout detected, retry the oldest request of min_unacked_psn
     # implicitly NAK and retry
-    def retry_pkts(self, psn_begin_retry, psn_end_retry = None, retry_type = OTHER_RETRY):
+    def retry_pkts(self, psn_begin_retry, psn_end_retry = None, retry_type = OTHER_RETRY, retry_handler = None):
         if psn_end_retry is None:
             # Retry packet with PSN from psn_begin_retry to psn_end_retry (not included)
             psn_end_retry = self.sq_psn
+
+        if retry_handler:
+            retry_handler()
 
         if psn_begin_retry not in self.req_pkt_psn_wr_ssn_dict: # psn_begin_retry is a partial read response PSN
             psn_begin_retry = self.retry_partial_read(partial_read_resp_psn = psn_begin_retry, retry_type = retry_type)
@@ -1167,7 +1170,7 @@ class SQ:
         self.update_min_unacked_psn(min_unacked_psn = psn_upper_limit)
         return (True, psn_upper_limit, implicit_ack_pkt_num) # coalesce_ack success
 
-    def handle_ack(self, ack):
+    def handle_ack(self, ack, retry_handler = None):
         assert ack[BTH].opcode == RC.ACKNOWLEDGE, 'should be ack response'
 
         # AETH.code {0: "ACK", 1: "RNR", 2: "RSVD", 3: "NAK"}
@@ -1180,7 +1183,7 @@ class SQ:
             #self.coalesce_ack(ack[BTH].psn)
 
             # Explicitly NAK corresponding request
-            nnak_ssn, ak_pkt = self.req_pkt_psn_wr_ssn_dict[ack[BTH].psn]
+            nak_ssn, ak_pkt = self.req_pkt_psn_wr_ssn_dict[ack[BTH].psn]
             nak_sr = self.get_outstanding_wr(nak_ssn)
             nak_cqe = CQE(
                 wr_id = nak_sr.id(),
@@ -1198,7 +1201,7 @@ class SQ:
             # Since current implementation is single-thread, this case does not matter
             for pending_ssn, wr_ctx in self.outstanding_wr_dict.items():
                 pending_sr = wr_ctx.wr
-                rc_op = unacked_pkt[BTH].opcode
+                rc_op = ak_pkt[BTH].opcode
                 flush_pending_cqe = CQE(
                     wr_id = pending_sr.id(),
                     status = WC_STATUS.WR_FLUSH_ERR,
@@ -1243,7 +1246,7 @@ class SQ:
 
             # TODO: double check RNR retry only the specified request packet or retry all thereafter
             rnr_wr_ssn, rnr_pkt = self.req_pkt_psn_wr_ssn_dict[rnr_psn]
-            self.retry_one_wr(rnr_wr_ssn, psn_begin_retry = rnr_psn, retry_type = RNR_RETRY)
+            self.retry_one_wr(rnr_wr_ssn, psn_begin_retry = rnr_psn, retry_type = RNR_RETRY, retry_handler = retry_handler)
             # if rc_op == RC.SEND_FIRST: # Retry whole send request
             #     send_wr = self.get_outstanding_wr(rnr_wr_ssn)
             #     assert send_wr.len() > self.pmtu, 'this RNR retried send request should have multiple packets'
@@ -1273,7 +1276,7 @@ class SQ:
         elif (ack[AETH].code == 3 and ack[AETH].value == 0): # NAK seq error, should retry
             seq_err_psn = ack[BTH].psn
             logging.debug(f'SQ={self.sqpn()} received NAK SEQ ERR with PSN={seq_err_psn}')
-            self.retry_pkts(psn_begin_retry = seq_err_psn, retry_type = OTHER_RETRY) # retry remaining request if any
+            self.retry_pkts(psn_begin_retry = seq_err_psn, retry_type = OTHER_RETRY, retry_handler= retry_handler) # retry remaining request if any
         else:
             logging.info('received reserved AETH code or reserved AETH NAK value or unsported AETH NAK value: ' + ask.show(dump = True))
         return False # No ACK-ed packet, do not update unacked_min_psn
@@ -1509,7 +1512,7 @@ class RQ:
         logging.debug(f'RQ={self.sqpn()} send to IP={dst_ip} a response: ' + pkt.show(dump = True))
         send(pkt)
 
-    def recv_pkt(self, pkt):
+    def recv_pkt(self, pkt, retry_handler = None):
         logging.debug(f'RQ={self.sqpn()} received packet with length={len(pkt)}: ' + pkt.show(dump = True) + f', previous operation is: {self.pre_pkt_op}')
         rc_op = pkt[BTH].opcode
 
@@ -1545,7 +1548,7 @@ class RQ:
             self.pre_pkt_op = rc_op
         elif RC.response(rc_op):
             if self.sq.is_expected_resp(pkt[BTH].psn):
-                self.sq.handle_expected_resp(pkt)
+                self.sq.handle_expected_resp(pkt, retry_handler)
                 self.pre_pkt_op = rc_op
             else:
                 self.sq.handle_dup_or_illegal_resp(pkt)
@@ -1915,8 +1918,8 @@ class QP:
     def qpn(self):
         return self.sq.sqpn()
 
-    def recv_pkt(self, pkt):
-        self.rq.recv_pkt(pkt)
+    def recv_pkt(self, pkt, retry_handler):
+        self.rq.recv_pkt(pkt, retry_handler)
 
     def poll_cq(self):
         if not self.cq.empty():
@@ -1972,7 +1975,7 @@ class RoCEv2:
     def mtu(self):
         return self.pmtu
 
-    def recv_pkts(self, npkt = 1):
+    def recv_pkts(self, npkt = 1, retry_handler = None):
         for i in range(npkt):
             # TODO: handle retry
             self.roce_sock.settimeout(self.recv_timeout_secs)
@@ -1980,5 +1983,5 @@ class RoCEv2:
             roce_pkt = BTH(roce_bytes)
             # TODO: handle head verification, wrong QPN
             local_qp = self.qp_dict[roce_pkt.dqpn]
-            local_qp.recv_pkt(roce_pkt)
+            local_qp.recv_pkt(roce_pkt, retry_handler)
         logging.debug(f'received {npkt} RoCE packets')

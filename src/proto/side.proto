@@ -14,4 +14,8 @@ service Side {
     rpc RemoteRead(RemoteReadRequest) returns (RemoteReadResponse) {}
     rpc LocalWrite(LocalWriteRequest) returns (LocalWriteResponse) {}
     rpc LocalCheckMem(LocalCheckMemRequest) returns (LocalCheckMemResponse) {}
+    rpc RecvPkt(RecvPktRequest) returns (RecvPktResponse) {}
+    rpc UnblockRetry(UnblockRetryRequest) returns (UnblockRetryResponse) {}
+    rpc LocalRecv(LocalRecvRequest) returns (LocalRecvResponse) {}
+    rpc RemoteSend(RemoteSendRequest) returns (RemoteSendResponse) {}
 }
