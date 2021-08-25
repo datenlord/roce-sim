@@ -1,5 +1,5 @@
 import yaml
-from case import read_remote_success
+from case import read_remote_success, send_rnr_retry
 from sys import argv
 from config import Configure
 
@@ -12,6 +12,7 @@ MANAGER_VERSION = '0.0.1'
 
 CASE_MAPPING = {
     'read_remote_success': read_remote_success.ReadRemoteSuccess,
+    'send_rnr_retry': send_rnr_retry.SendRnrRetry,
 }
 
 class SanityManager:

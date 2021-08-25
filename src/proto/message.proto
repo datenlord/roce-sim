@@ -121,6 +121,12 @@ message LocalWriteRequest {
 message LocalWriteResponse {
 }
 
+message UnblockRetryRequest {
+}
+
+message UnblockRetryResponse {
+}
+
 message LocalCheckMemRequest {
     uint32 mr_id = 1;
     uint32 offset = 2;
@@ -131,3 +137,31 @@ message LocalCheckMemRequest {
 message LocalCheckMemResponse {
     bool same = 1;
 }
+
+message RecvPktRequest {
+    bool wait_for_retry = 1;
+    bool has_cqe = 2;
+    uint32 qp_id = 3;
+}
+
+message RecvPktResponse {}
+
+message LocalRecvRequest {
+    uint64 addr = 1;
+    uint32 len = 2;
+    uint32 lkey = 3;
+    uint32 qp_id = 6;
+    uint32 cq_id = 7;
+}
+
+message LocalRecvResponse {}
+
+message RemoteSendRequest {
+    uint64 addr = 1;
+    uint32 len = 2;
+    uint32 lkey = 3;
+    uint32 qp_id = 6;
+    uint32 cq_id = 7;
+}
+
+message RemoteSendResponse {}

@@ -9,8 +9,9 @@ use grpcio::{ChannelBuilder, Environment, ResourceQuota, ServerBuilder};
 use lazy_static::lazy_static;
 use proto::message::{
     ConnectQpResponse, CreateCqResponse, CreateMrResponse, CreatePdResponse, CreateQpResponse,
-    LocalCheckMemResponse, LocalWriteResponse, OpenDeviceResponce, QueryGidResponse,
-    QueryPortResponse, RemoteReadResponse, VersionResponse,
+    LocalCheckMemResponse, LocalRecvResponse, LocalWriteResponse, OpenDeviceResponce,
+    QueryGidResponse, QueryPortResponse, RecvPktResponse, RemoteReadResponse,
+    RemoteSendResponse, UnblockRetryResponse, VersionResponse,
 };
 use proto::side_grpc::{self, Side};
 use std::collections::HashMap;
@@ -255,6 +256,89 @@ impl Side for SideImpl {
         std::thread::sleep(Duration::from_secs(1));
 
         let resp = RemoteReadResponse::default();
+        let f = sink.success(resp).map_err(|_| {}).map(|_| ());
+        ctx.spawn(f)
+    }
+
+    fn local_recv(
+        &mut self,
+        ctx: grpcio::RpcContext,
+        req: proto::message::LocalRecvRequest,
+        sink: grpcio::UnarySink<proto::message::LocalRecvResponse>,
+    ) {
+        rdma::ibv::post_receive(
+            req.get_addr(),
+            req.get_len(),
+            req.get_lkey(),
+            *QP_MAP
+                .read()
+                .unwrap()
+                .get(req.get_qp_id().cast::<usize>())
+                .unwrap(),
+        );
+
+        rdma::ibv::poll_completion(
+            CQ_MAP
+                .read()
+                .unwrap()
+                .get(req.get_cq_id().cast::<usize>())
+                .unwrap()
+                .0,
+        );
+
+        let resp = LocalRecvResponse::default();
+        let f = sink.success(resp).map_err(|_| {}).map(|_| ());
+        ctx.spawn(f)
+    }
+
+    fn remote_send(
+        &mut self,
+        ctx: grpcio::RpcContext,
+        req: proto::message::RemoteSendRequest,
+        sink: grpcio::UnarySink<proto::message::RemoteSendResponse>,
+    ) {
+        rdma::ibv::remote_send(
+            req.get_addr(),
+            req.get_len(),
+            req.get_lkey(),
+            *QP_MAP
+                .read()
+                .unwrap()
+                .get(req.get_qp_id().cast::<usize>())
+                .unwrap(),
+            CQ_MAP
+                .read()
+                .unwrap()
+                .get(req.get_cq_id().cast::<usize>())
+                .unwrap()
+                .0,
+        );
+
+        let resp = RemoteSendResponse::default();
+        let f = sink.success(resp).map_err(|_| {}).map(|_| ());
+        ctx.spawn(f)
+    }
+
+    // recv_pkt is too low level for rust side, which is processed by the driver and hardware
+    fn recv_pkt(
+        &mut self,
+        ctx: grpcio::RpcContext,
+        _req: proto::message::RecvPktRequest,
+        sink: grpcio::UnarySink<proto::message::RecvPktResponse>,
+    ) {
+        let resp = RecvPktResponse::default();
+        let f = sink.success(resp).map_err(|_| {}).map(|_| ());
+        ctx.spawn(f)
+    }
+
+    // can do nothing on retrying
+    fn unblock_retry(
+        &mut self,
+        ctx: grpcio::RpcContext,
+        _req: proto::message::UnblockRetryRequest,
+        sink: grpcio::UnarySink<proto::message::UnblockRetryResponse>,
+    ) {
+        let resp = UnblockRetryResponse::default();
         let f = sink.success(resp).map_err(|_| {}).map(|_| ());
         ctx.spawn(f)
     }
