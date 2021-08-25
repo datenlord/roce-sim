@@ -152,7 +152,7 @@ qp.modify_qp(
     sq_psn = S_PSN,
     timeout = dst_timeout,
     retry_cnt = dst_retry_cnt,
-    rnr_rery = dst_rnr_retry,
+    rnr_retry = dst_rnr_retry,
 )
 print(f'qp.rq.min_rnr_timer={qp.rq.min_rnr_timer}, dst_rnr_timer={dst_rnr_timer}')
 
