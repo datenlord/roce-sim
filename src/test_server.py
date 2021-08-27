@@ -132,7 +132,6 @@ print(f'received client metadata: {parsed_fields}')
 # Setup QP, post receive
 sg = SG(pos_in_mr = POS_IN_MR, length = mr.len() - POS_IN_MR, lkey = mr.lkey())
 rr = RecvWR(sgl = sg)
-qp.post_recv(rr)
 qp.modify_qp(
     qps = QPS.RTR,
     dgid = dst_gid,
@@ -141,6 +140,7 @@ qp.modify_qp(
     min_rnr_timer = dst_rnr_timer,
     rq_psn = dst_start_psn,
 )
+qp.post_recv(rr)
 
 # Exchange receive ready
 udp_sock.sendto(struct.pack('<i', ReceiveReady), peer_addr)
@@ -154,7 +154,7 @@ qp.modify_qp(
     retry_cnt = dst_retry_cnt,
     rnr_retry = dst_rnr_retry,
 )
-print(f'qp.rq.min_rnr_timer={qp.rq.min_rnr_timer}, dst_rnr_timer={dst_rnr_timer}')
+print(f'qp.rq.min_rnr_timer={qp.min_rnr_timer}, dst_rnr_timer={dst_rnr_timer}')
 
 case_no = 0
 

@@ -1,7 +1,16 @@
 from enum import IntEnum, IntFlag
 from roce import opcode
 
-DEFAULT_FLAG = 0
+EMPTY_FLAG = 0
+
+class RETRY_TYPE(IntEnum):
+    RNR = 1
+    SEQ = 2
+    IMPLICIT = 3
+    TIMEOUT = 4
+
+    def non_rnr_retry(retry_type):
+        return retry_type != RETRY_TYPE.RNR
 
 class QPS(IntEnum):
     RESET = 0
@@ -190,6 +199,15 @@ class EVENT_TYPE(IntEnum):
     CLIENT_REREGISTER = 17
     GID_CHANGE = 18
     WQ_FATAL = 19
+
+    def from_wc_status(wc_status):
+        event_type = None
+        if wc_status in [WC_STATUS.REM_INV_REQ_ERR, WC_STATUS.REM_OP_ERR]:
+            event_type = EVENT_TYPE.QP_REQ_ERR
+        elif wc_status == WC_STATUS.REM_ACCESS_ERR:
+            event_type = EVENT_TYPE.QP_ACCESS_ERR
+        else:
+            raise Exception(f'wc_status={wc_status} has no EVENT_TYPE')
 
 class RC(IntEnum):
     SEND_FIRST = opcode('RC', 'SEND_FIRST')[0]

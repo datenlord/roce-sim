@@ -603,6 +603,7 @@ assert atomic_req[BTH].psn == src_epsn, 'atomic request PSN not match ePSN'
 roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
 atomic_req = BTH(roce_bytes)
 atomic_req.show()
+#print(f'atomic_req[BTH].psn={atomic_req[BTH].psn}, src_epsn={src_epsn}')
 assert atomic_req[BTH].psn == src_epsn, 'atomic request PSN not match ePSN'
 # RoCE send with inv
 roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
