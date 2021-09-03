@@ -1,0 +1,19 @@
+side_2:
+  # Python Side
+  ip: "SIDE_2_IP"
+  port: SIDE_2_PORT
+  dev_name: ""
+  ib_port: 1
+  gid_idx: 1
+side_1:
+  # Rust Side
+  ip: "SIDE_1_IP"
+  port: SIDE_1_PORT
+  dev_name: ""
+  ib_port: 1
+  gid_idx: 1
+test_cases:
+  - "read_success"
+  - "write_success"
+  #- "send_success"
+  #- "send_rnr_retry"

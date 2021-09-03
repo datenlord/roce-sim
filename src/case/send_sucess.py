@@ -33,6 +33,8 @@ def send_side(self_info: SideInfo, other_info: SideInfo, side: Side, stub: SideS
     time.sleep(1)
     stub.RemoteSend(message_pb2.RemoteSendRequest(addr=self_info.addr, len=2, lkey=self_info.lkey,
                     qp_id=self_info.qp_id, cq_id=self_info.cq_id))
+    stub.RecvPkt(message_pb2.RecvPktRequest(
+        wait_for_retry=False, has_cqe=True, qp_id=self_info.qp_id))
 
 def recv_side(self_info: SideInfo, other_info: SideInfo, side: Side, stub: SideStub, other_stub: SideStub):
     stub.ConnectQp(message_pb2.ConnectQpRequest(

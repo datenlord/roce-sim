@@ -17,7 +17,7 @@ use proto::side_grpc::{self, Side};
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::env;
-use std::io::{self, Read};
+//use std::io::{self, Read};
 use std::ops::DerefMut;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
@@ -44,8 +44,7 @@ fn main() -> anyhow::Result<()> {
 
     let (tx, rx) = oneshot::channel();
     thread::spawn(move || {
-        print!("Press ENTER to exit...");
-        let _ = io::stdin().read(&mut [0]).unwrap();
+        thread::sleep(Duration::from_secs(60));
         tx.send(())
     });
     let _ = block_on(rx);
@@ -85,6 +84,7 @@ impl Side for SideImpl {
         req: proto::message::OpenDeviceRequest,
         sink: grpcio::UnarySink<proto::message::OpenDeviceResponce>,
     ) {
+        print!("Get open_device request");
         let (ibv_context, dev_name) = rdma::ibv::open_ib_ctx(&req.dev_name);
         DEV_MAP
             .write()
@@ -168,6 +168,7 @@ impl Side for SideImpl {
         req: proto::message::CreateQpRequest,
         sink: grpcio::UnarySink<proto::message::CreateQpResponse>,
     ) {
+        print!("cq_id {}, pd_id {}", req.get_cq_id(), req.get_pd_id());
         let qp = rdma::ibv::create_qp(
             CQ_MAP
                 .read()
@@ -220,6 +221,13 @@ impl Side for SideImpl {
             remote_qp_num,
             remote_lid.cast(),
             u128::from_be_bytes(remote_gid),
+        );
+        print!(
+            "Transfer to RTS, qp = {:?}, timeout = {}, retry_cnt = {}, rnr_retry = {}",
+            (*qp).inner,
+            timeout,
+            retry_cnt,
+            rnr_retry
         );
         rdma::ibv::modify_qp_to_rts(*qp, timeout.cast(), retry_cnt.cast(), rnr_retry.cast());
 

@@ -14,9 +14,24 @@ jobs:
         with:
           repository: secdev/scapy
           path: ./scapy
+      - name: Prepare Environment
+        run : |
+          sudo apt update
+          sudo apt install -y protobuf-compiler python3.9 net-tools librdmacm-dev ibverbs-utils rdmacm-utils perftest
+          python3 -m pip install grpcio
+          python3 -m pip install grpcio-tools
+          pip install --upgrade protobuf
+          cargo install protobuf-codegen
+          cargo install grpcio-compiler
+          ./test/setup.sh
+      - name: Compile
+        run: |
+          ./build.sh
+          cargo build
+          docker build -t grpc-python3 ./test
       - name: Run
         run: |
-          ./run.sh
+          ./test/run.sh
       - name: Setup tmate session
         if: ${{ failure() }}
         uses: mxschmitt/action-tmate@v3

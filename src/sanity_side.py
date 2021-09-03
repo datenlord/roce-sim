@@ -77,7 +77,7 @@ class SanitySide(SideServicer):
     
     def ConnectQp(self, request, context):
         qp = qp_list[request.qp_id]
-        qp.modify_qp(qps = QPS.RTS, access_flags = (request.access_flag | ACCESS_FLAGS.ZERO_BASED), dgid = request.remote_gid, dst_qpn = request.remote_qp_num, timeout = request.timeout, retry_cnt = request.retry, rnr_rery = request.rnr_retry)
+        qp.modify_qp(qps = QPS.RTS, access_flags = (request.access_flag | ACCESS_FLAGS.ZERO_BASED), dgid = request.remote_gid, dst_qpn = request.remote_qp_num, timeout = request.timeout, retry_cnt = request.retry, rnr_retry = request.rnr_retry)
         return ConnectQpResponse()
 
     def LocalWrite(self, request, context):
