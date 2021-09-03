@@ -1,4 +1,22 @@
-from proto.message_pb2 import ConnectQpResponse, CreateCqResponse, CreateMrResponse, CreatePdResponse, CreateQpResponse, LocalCheckMemResponse, LocalRecvResponse, LocalWriteResponse, OpenDeviceResponce, QueryPortResponse, RecvPktResponse, RemoteReadRequest, RemoteSendResponse, RemoteWriteRequest, UnblockRetryResponse, VersionResponse, QueryGidResponse
+from proto.message_pb2 import (
+    ConnectQpResponse,
+    CreateCqResponse,
+    CreateMrResponse,
+    CreatePdResponse,
+    CreateQpResponse,
+    LocalCheckMemResponse,
+    LocalRecvResponse,
+    LocalWriteResponse,
+    OpenDeviceResponce,
+    QueryPortResponse,
+    RecvPktResponse,
+    RemoteReadRequest,
+    RemoteSendResponse,
+    RemoteWriteRequest,
+    UnblockRetryResponse,
+    VersionResponse,
+    QueryGidResponse,
+)
 from proto.side_pb2_grpc import SideServicer, add_SideServicer_to_server
 from concurrent import futures
 import grpc
@@ -20,15 +38,16 @@ qp_list = []
 retry_lock = Lock()
 retry_flag = False
 
+
 class SanitySide(SideServicer):
     def __init__(self, ip):
         self.ip = ip
 
     def Version(self, request, context):
-        return VersionResponse(version='0.1')
+        return VersionResponse(version="0.1")
 
     def OpenDevice(self, request, context):
-        print('request device name is {}'.format(request.dev_name))
+        print("request device name is {}".format(request.dev_name))
         return OpenDeviceResponce(dev_name="dev_name")
 
     def CreatePd(self, request, context):
@@ -44,8 +63,11 @@ class SanitySide(SideServicer):
         pd = pd_list[pd_id]
         pd_lock.acquire()  # TODO: Make pd method thread-safe
         # TODO: Make the va different on different request
-        mr = pd.reg_mr(va=0x0000000000000000, length=request.len,
-                       access_flags=(request.flag | ACCESS_FLAGS.ZERO_BASED))
+        mr = pd.reg_mr(
+            va=0x0000000000000000,
+            length=request.len,
+            access_flags=(request.flag | ACCESS_FLAGS.ZERO_BASED),
+        )
         pd_lock.release()
 
         mr_lock.acquire()
@@ -53,7 +75,13 @@ class SanitySide(SideServicer):
         mr_id = len(mr_list) - 1
         mr_lock.release()
 
-        return CreateMrResponse(addr=mr.va, len=mr.length, rkey=mr.remote_key, lkey=mr.local_key, mr_id=mr_id)
+        return CreateMrResponse(
+            addr=mr.va,
+            len=mr.length,
+            rkey=mr.remote_key,
+            lkey=mr.local_key,
+            mr_id=mr_id,
+        )
 
     def CreateCq(self, request, context):
         cq = GLOBAL_ROCE.create_cq()
@@ -62,7 +90,7 @@ class SanitySide(SideServicer):
         cq_id = len(cq_list) - 1
         cq_lock.release()
 
-        return CreateCqResponse(cq_id = cq_id)
+        return CreateCqResponse(cq_id=cq_id)
 
     def CreateQp(self, request, context):
         pd = pd_list[request.pd_id]
@@ -73,11 +101,19 @@ class SanitySide(SideServicer):
         qp_id = len(qp_list) - 1
         qp_lock.release()
 
-        return CreateQpResponse(qp_id = qp_id, qp_num = qp.qpn())
-    
+        return CreateQpResponse(qp_id=qp_id, qp_num=qp.qpn())
+
     def ConnectQp(self, request, context):
         qp = qp_list[request.qp_id]
-        qp.modify_qp(qps = QPS.RTS, access_flags = (request.access_flag | ACCESS_FLAGS.ZERO_BASED), dgid = request.remote_gid, dst_qpn = request.remote_qp_num, timeout = request.timeout, retry_cnt = request.retry, rnr_retry = request.rnr_retry)
+        qp.modify_qp(
+            qps=QPS.RTS,
+            access_flags=(request.access_flag | ACCESS_FLAGS.ZERO_BASED),
+            dgid=request.remote_gid,
+            dst_qpn=request.remote_qp_num,
+            timeout=request.timeout,
+            retry_cnt=request.retry,
+            rnr_retry=request.rnr_retry,
+        )
         return ConnectQpResponse()
 
     def LocalWrite(self, request, context):
@@ -92,31 +128,43 @@ class SanitySide(SideServicer):
         with retry_lock:
             retry_flag = False
         return UnblockRetryResponse()
-    
+
     def RemoteRead(self, request, context):
-        sg = SG(pos_in_mr = request.addr, length = request.len, lkey = request.lkey)
-        sr = SendWR(opcode = WR_OPCODE.RDMA_READ, sgl = sg, send_flags=SEND_FLAGS.SIGNALED, rmt_va = request.remote_addr, rkey = request.remote_key)
+        sg = SG(pos_in_mr=request.addr, length=request.len, lkey=request.lkey)
+        sr = SendWR(
+            opcode=WR_OPCODE.RDMA_READ,
+            sgl=sg,
+            send_flags=SEND_FLAGS.SIGNALED,
+            rmt_va=request.remote_addr,
+            rkey=request.remote_key,
+        )
         qp = qp_list[request.qp_id]
         qp.post_send(sr)
         qp.process_one_sr()
         return RemoteReadRequest()
 
     def RemoteWrite(self, request, context):
-        sg = SG(pos_in_mr = request.addr, length = request.len, lkey = request.lkey)
-        sr = SendWR(opcode = WR_OPCODE.RDMA_WRITE, sgl = sg, send_flags=SEND_FLAGS.SIGNALED, rmt_va = request.remote_addr, rkey = request.remote_key)
+        sg = SG(pos_in_mr=request.addr, length=request.len, lkey=request.lkey)
+        sr = SendWR(
+            opcode=WR_OPCODE.RDMA_WRITE,
+            sgl=sg,
+            send_flags=SEND_FLAGS.SIGNALED,
+            rmt_va=request.remote_addr,
+            rkey=request.remote_key,
+        )
         qp = qp_list[request.qp_id]
         qp.post_send(sr)
         qp.process_one_sr()
         return RemoteWriteRequest()
 
     def RemoteSend(self, request, context):
-        sg = SG(pos_in_mr = request.addr, length = request.len, lkey = request.lkey)
-        sr = SendWR(opcode = WR_OPCODE.SEND, sgl = sg, send_flags=SEND_FLAGS.SIGNALED)
+        sg = SG(pos_in_mr=request.addr, length=request.len, lkey=request.lkey)
+        sr = SendWR(opcode=WR_OPCODE.SEND, sgl=sg, send_flags=SEND_FLAGS.SIGNALED)
         qp = qp_list[request.qp_id]
         qp.post_send(sr)
         qp.process_one_sr()
         return RemoteSendResponse()
-    
+
     def RecvPkt(self, request, context):
         retry_handler = default_retry_handler if request.wait_for_retry else None
         GLOBAL_ROCE.recv_pkts(1, retry_handler=retry_handler)
@@ -127,40 +175,45 @@ class SanitySide(SideServicer):
 
     def LocalCheckMem(self, request, context):
         mr = mr_list[request.mr_id]
-        read = mr.byte_data[request.offset: (request.offset + request.len)]
-        return LocalCheckMemResponse(same = (bytearray(request.expected) == read))
+        read = mr.byte_data[request.offset : (request.offset + request.len)]
+        return LocalCheckMemResponse(same=(bytearray(request.expected) == read))
 
     def LocalRecv(self, request, context):
         qp = qp_list[request.qp_id]
-        sg = SG(pos_in_mr = request.addr, length = request.len, lkey = request.lkey)
-        rr = RecvWR(sgl = sg)
+        sg = SG(pos_in_mr=request.addr, length=request.len, lkey=request.lkey)
+        rr = RecvWR(sgl=sg)
         qp.post_recv(rr)
-        qp.modify_qp(qps = QPS.RTR)
+        qp.modify_qp(qps=QPS.RTR)
         return LocalRecvResponse()
 
     def QueryPort(self, request, context):
         # Seem the lid is not required in the protocol
-        return QueryPortResponse(lid = 1)
+        return QueryPortResponse(lid=1)
 
     def QueryGid(self, request, context):
-        return QueryGidResponse(gid_raw = b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff' + bytes(map(int, self.ip.split('.'))))
+        return QueryGidResponse(
+            gid_raw=b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff"
+            + bytes(map(int, self.ip.split(".")))
+        )
+
 
 def default_retry_handler():
     global retry_flag, retry_lock
     print("Block")
     with retry_lock:
         retry_flag = True
-    
+
     while retry_flag:
         time.sleep(1)
 
     print("Get unblock signal")
+
 
 if __name__ == "__main__":
     ip_addr = argv[1]
     port = argv[2]
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     add_SideServicer_to_server(SanitySide(ip_addr), server)
-    server.add_insecure_port('[::]:{}'.format(port))
+    server.add_insecure_port("[::]:{}".format(port))
     server.start()
     server.wait_for_termination()

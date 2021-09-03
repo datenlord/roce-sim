@@ -9,6 +9,8 @@ HOST_IP=`hostname -I | cut -d ' ' -f 1`
 LINK_DEV_IP="10.1.1.15"
 LINK_DEV_NAME=mylink
 CONTAINER_NET="10.1.1.0/24"
+CONTAINER_SERVER_IP="10.1.1.48"
+CONTAINER_CLIENT_IP="10.1.1.64"
 CONTAINER_IP="10.1.1.48"
 GRPC_PORT="9000"
 
@@ -22,17 +24,26 @@ sudo ip link set $LINK_DEV_NAME up
 sudo ip route add ${CONTAINER_NET} dev $LINK_DEV_NAME
 
 cd src
-#docker run --rm -d -v `pwd`:`pwd` -w `pwd` --net=mymacvlan --ip=$CONTAINER_IP --name exch_server python:3 python3 exch_server.py
-#sleep 1 # Wait a while for server to ready
-#python3 exch_client.py -s $CONTAINER_IP
-#
-#cd ../scapy
-#cp ../src/roce*.py .
-#cp ../src/test_*.py .
-#sleep 1 # Wait a while for docker to release CONTAINER_IP
-#docker run --rm -d -v `pwd`:`pwd` -w `pwd` --net=mymacvlan --ip=$CONTAINER_IP --name test_server python:3 python3 test_server.py -s $CONTAINER_IP
-#sleep 1 # Wait a while for server to ready
-#sudo python3 test_client.py -d $CONTAINER_IP -s $HOST_IP
+
+docker kill `docker ps -a -q` || true # Clean all pending containers to release IP
+docker run --rm -d -v `pwd`:`pwd` -w `pwd` --net=mymacvlan --ip=$CONTAINER_SERVER_IP --name exch_server python:3 python3 exch_server.py
+sleep 1 # Wait a while for server to ready
+docker run --rm -v `pwd`:`pwd` -w `pwd` --net=mymacvlan --ip=$CONTAINER_CLIENT_IP --name exch_client python:3 python3 exch_client.py -s $CONTAINER_SERVER_IP
+
+cd ../scapy
+cp ../src/roce*.py .
+cp ../src/sim_*.py .
+cp ../src/test_*.py .
+sleep 1 # Wait a while for docker to release IP
+docker run --rm -d -v `pwd`:`pwd` -w `pwd` --net=mymacvlan --ip=$CONTAINER_SERVER_IP --name test_server python:3 python3 test_server.py -s $CONTAINER_SERVER_IP
+sleep 1 # Wait a while for server to ready
+docker run --rm -v `pwd`:`pwd` -w `pwd` --net=mymacvlan --ip=$CONTAINER_CLIENT_IP --name test_client python:3 python3 test_client.py -d $CONTAINER_SERVER_IP -s $CONTAINER_CLIENT_IP
+
+sleep 1 # Wait a while for docker to release IP
+docker run --rm -d -v `pwd`:`pwd` -w `pwd` --net=mymacvlan --ip=$CONTAINER_SERVER_IP --name sim_server python:3 python3 sim_server.py -s $CONTAINER_SERVER_IP
+sleep 1 # Wait a while for server to ready
+docker run --rm -v `pwd`:`pwd` -w `pwd` --net=mymacvlan --ip=$CONTAINER_CLIENT_IP --name sim_client python:3 python3 sim_client.py -d $CONTAINER_SERVER_IP -s $CONTAINER_CLIENT_IP
+
 
 # Start Sanity Test
 cd ../test
