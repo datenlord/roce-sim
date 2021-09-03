@@ -32,6 +32,9 @@ def write_side(self_info: SideInfo, other_info: SideInfo, side: Side, stub: Side
     time.sleep(1)
     stub.RemoteWrite(message_pb2.RemoteWriteRequest(addr=self_info.addr, len=2, lkey=self_info.lkey,
                     remote_addr=other_info.addr, remote_key=other_info.rkey, qp_id=self_info.qp_id, cq_id=self_info.cq_id))
+    
+    stub.RecvPkt(message_pb2.RecvPktRequest(
+        wait_for_retry=False, has_cqe=True, qp_id=self_info.qp_id))
 
 
 def be_write_side(self_info: SideInfo, other_info: SideInfo, side: Side, stub: SideStub):
