@@ -1,4 +1,4 @@
-from proto.message_pb2 import ConnectQpResponse, CreateCqResponse, CreateMrResponse, CreatePdResponse, CreateQpResponse, LocalCheckMemResponse, LocalRecvResponse, LocalWriteResponse, OpenDeviceResponce, QueryPortResponse, RecvPktResponse, RemoteReadRequest, RemoteSendResponse, UnblockRetryResponse, VersionResponse, QueryGidResponse
+from proto.message_pb2 import ConnectQpResponse, CreateCqResponse, CreateMrResponse, CreatePdResponse, CreateQpResponse, LocalCheckMemResponse, LocalRecvResponse, LocalWriteResponse, OpenDeviceResponce, QueryPortResponse, RecvPktResponse, RemoteReadRequest, RemoteSendResponse, RemoteWriteRequest, UnblockRetryResponse, VersionResponse, QueryGidResponse
 from proto.side_pb2_grpc import SideServicer, add_SideServicer_to_server
 from concurrent import futures
 import grpc
@@ -100,6 +100,14 @@ class SanitySide(SideServicer):
         qp.post_send(sr)
         qp.process_one_sr()
         return RemoteReadRequest()
+
+    def RemoteWrite(self, request, context):
+        sg = SG(pos_in_mr = request.addr, length = request.len, lkey = request.lkey)
+        sr = SendWR(opcode = WR_OPCODE.RDMA_WRITE, sgl = sg, send_flags=SEND_FLAGS.SIGNALED, rmt_va = request.remote_addr, rkey = request.remote_key)
+        qp = qp_list[request.qp_id]
+        qp.post_send(sr)
+        qp.process_one_sr()
+        return RemoteWriteRequest()
 
     def RemoteSend(self, request, context):
         sg = SG(pos_in_mr = request.addr, length = request.len, lkey = request.lkey)

@@ -5,7 +5,7 @@ from proto import message_pb2, message_pb2_grpc
 import threading
 import time
 
-class ReadRemoteSuccess(TestCase):
+class ReadSuccess(TestCase):
     def __init__(self, stub1: SideStub, stub2: SideStub, side1: Side, side2: Side):
         TestCase.__init__(self, stub1, stub2, side1, side2)
 

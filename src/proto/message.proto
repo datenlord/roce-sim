@@ -165,3 +165,16 @@ message RemoteSendRequest {
 }
 
 message RemoteSendResponse {}
+
+message RemoteWriteRequest {
+    uint64 addr = 1;
+    uint32 len = 2;
+    uint32 lkey = 3;
+    uint64 remote_addr = 4;
+    uint32 remote_key = 5;
+    uint32 qp_id = 6;
+    uint32 cq_id = 7;
+}
+
+message RemoteWriteResponse {
+}

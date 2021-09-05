@@ -10,8 +10,8 @@ use lazy_static::lazy_static;
 use proto::message::{
     ConnectQpResponse, CreateCqResponse, CreateMrResponse, CreatePdResponse, CreateQpResponse,
     LocalCheckMemResponse, LocalRecvResponse, LocalWriteResponse, OpenDeviceResponce,
-    QueryGidResponse, QueryPortResponse, RecvPktResponse, RemoteReadResponse,
-    RemoteSendResponse, UnblockRetryResponse, VersionResponse,
+    QueryGidResponse, QueryPortResponse, RecvPktResponse, RemoteReadResponse, RemoteSendResponse,
+    RemoteWriteResponse, UnblockRetryResponse, VersionResponse,
 };
 use proto::side_grpc::{self, Side};
 use std::collections::HashMap;
@@ -253,9 +253,37 @@ impl Side for SideImpl {
                 .0,
         );
 
-        std::thread::sleep(Duration::from_secs(1));
-
         let resp = RemoteReadResponse::default();
+        let f = sink.success(resp).map_err(|_| {}).map(|_| ());
+        ctx.spawn(f)
+    }
+
+    fn remote_write(
+        &mut self,
+        ctx: grpcio::RpcContext,
+        req: proto::message::RemoteWriteRequest,
+        sink: grpcio::UnarySink<proto::message::RemoteWriteResponse>,
+    ) {
+        rdma::ibv::remote_write(
+            req.get_addr(),
+            req.get_len(),
+            req.get_lkey(),
+            req.get_remote_addr(),
+            req.get_remote_key(),
+            *QP_MAP
+                .read()
+                .unwrap()
+                .get(req.get_qp_id().cast::<usize>())
+                .unwrap(),
+            CQ_MAP
+                .read()
+                .unwrap()
+                .get(req.get_cq_id().cast::<usize>())
+                .unwrap()
+                .0,
+        );
+
+        let resp = RemoteWriteResponse::default();
         let f = sink.success(resp).map_err(|_| {}).map(|_| ());
         ctx.spawn(f)
     }
