@@ -880,10 +880,12 @@ class SQ:
         assert WR_OPCODE.write(sr.op()), 'should be write operation'
         addr = sr.laddr()
         write_size = sr.len()
+        # Add pad
+        pad = (4 - (write_size % 4)) % 4
         write_data = b''
         if write_size:
             mr = self.pd.get_mr(sr.lkey())
-            write_data = mr.read(addr = addr, size = write_size)
+            write_data = mr.read(addr = addr, size = (write_size + pad))
 
         write_req_pkt_num = math.ceil(write_size / self.pmtu) if write_size else 1
         cpsn = self.sq_psn
@@ -935,6 +937,7 @@ class SQ:
             dqpn = dqpn,
             ackreq = ackreq,
             solicited = solicited,
+            padcount = pad,
         )
         write_req = None
         if RC.only_req_pkt(rc_op):
@@ -951,7 +954,7 @@ class SQ:
             else:
                 write_req = write_bth
         if write_size > 0:
-            raw_pkt = Raw(load = write_data[((write_req_pkt_num - 1) * self.pmtu) : write_size])
+            raw_pkt = Raw(load = write_data[((write_req_pkt_num - 1) * self.pmtu) : (write_size + pad)])
             write_req = write_req/raw_pkt
         self.send_pkt(cssn, write_req)
         self.sq_psn = (self.sq_psn + write_req_pkt_num) % MAX_PSN

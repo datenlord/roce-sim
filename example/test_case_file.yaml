@@ -13,4 +13,4 @@ side_1:
   ib_port: 1
   gid_idx: 1
 test_cases:
-  - "read_remote_success"
+  - "read_success"

@@ -18,4 +18,5 @@ service Side {
     rpc UnblockRetry(UnblockRetryRequest) returns (UnblockRetryResponse) {}
     rpc LocalRecv(LocalRecvRequest) returns (LocalRecvResponse) {}
     rpc RemoteSend(RemoteSendRequest) returns (RemoteSendResponse) {}
+    rpc RemoteWrite(RemoteWriteRequest) returns (RemoteWriteResponse) {}
 }
