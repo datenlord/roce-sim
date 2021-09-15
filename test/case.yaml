@@ -15,5 +15,5 @@ side_1:
 test_cases:
   - "read_success"
   - "write_success"
-  #- "send_success"
-  #- "send_rnr_retry"
+  - "send_success"
+  - "send_rnr_retry"
