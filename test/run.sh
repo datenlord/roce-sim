@@ -60,7 +60,6 @@ cd ../
 RXE_DEV=rxe_eth0
 sudo rdma link delete $RXE_DEV || true
 
-ETH_DEV=`ifconfig -s | grep '^e' | cut -d ' ' -f 1 | head -n 1`
 sudo rdma link add $RXE_DEV type rxe netdev ${LINK_DEV_NAME}
 
 ./target/debug/sanity_side ${GRPC_PORT} 2>&1 > ./rust_side.log &
