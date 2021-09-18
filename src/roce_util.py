@@ -191,8 +191,8 @@ class Util:
             raw_data_len = len(pkt[Raw].load)
             padcount = raw_data_len % 4
             if padcount != 0:
-                pkt[Raw].load += pads[padcount]
-                pkt[BTH].padcount = padcount
+                pkt[Raw].load += pads[4 - padcount]
+                pkt[BTH].padcount = 4 - padcount
             assert (
                 len(pkt[Raw].load) % 4 == 0
             ), "packet payload must be of multipler of 4"

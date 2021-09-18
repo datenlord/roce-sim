@@ -1,5 +1,5 @@
 import yaml
-from case import read_success, send_rnr_retry, send_sucess, write_success
+from case import base
 from sys import argv
 from config import Configure
 
@@ -9,14 +9,6 @@ except ImportError:
     from yaml import Loader
 
 MANAGER_VERSION = "0.0.1"
-
-CASE_MAPPING = {
-    "read_success": read_success.ReadSuccess,
-    "send_rnr_retry": send_rnr_retry.SendRnrRetry,
-    "send_success": send_sucess.SendSuccess,
-    "write_success": write_success.WriteSuccess,
-}
-
 
 class SanityManager:
     def __init__(self, test_case_file):
@@ -38,13 +30,9 @@ class SanityManager:
         if not cases:
             raise RuntimeError("missing test_cases setting")
 
+        test = base.TestCase(stub1, stub2, self._config.side1(), self._config.side2())
         for c in cases:
-            if not c in CASE_MAPPING:
-                raise RuntimeError("{} test is not defnined".format(c))
-            test = CASE_MAPPING[c](
-                stub1, stub2, self._config.side1(), self._config.side2()
-            )
-            test.run()
+            test.run(c)
 
 
 if __name__ == "__main__":

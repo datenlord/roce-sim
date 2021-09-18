@@ -1,0 +1,17 @@
+side_1: 
+  - name: connect_qp
+  - name: local_write
+    offset: 0
+    content: 'ff'
+side_2:
+  - name: connect_qp
+  - name: sleep
+    len: 1
+  - name: remote_read
+    len: 1
+  - name: recv_pkt
+  - name: sleep
+    len: 1
+  - name: local_check
+    offset: 0
+    expected: 'ff'
