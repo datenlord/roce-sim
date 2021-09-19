@@ -441,12 +441,23 @@ sr = SendWR(
 )
 qp.post_send(sr)
 qp.process_one_sr()
-total_retry_cnt = None  # TODO: find out how many response packets
+total_retry_cnt = None
+cqe_err_status = None
 if qp.rnr_retry > qp.retry_cnt:
+    # In this case, the retry limit is retry_cnt
+    # Total retry count is first normal try + retry_cnt + retry_cnt - 1
     total_retry_cnt = 1 + qp.retry_cnt + qp.retry_cnt - 1
+    cqe_err_status = WC_STATUS.RETRY_EXC_ERR
 else:
+    # In this case, the retry limit is rnr_retry
+    # Total retry count is first normal try + rnr_retry - 1 + rnr_retry -1
     total_retry_cnt = 1 + qp.rnr_retry - 1 + qp.rnr_retry - 1
+    cqe_err_status = WC_STATUS.RNR_RETRY_EXC_ERR
 roce.recv_pkts(npkt=total_retry_cnt)
+# Each retry will incur two NAK, one RNR and one NAK seq error,
+# there are 2 * total_retry_cnt NAK packets responsed by RQ,
+# but SQ will exceed retry limit after received total_retry_cnt NAK packets,
+# so half of NAK packets remaining.
 roce.clear_remaining_pkts(npkt=total_retry_cnt)
 cqe = qp.poll_cq()
 assert cqe is not None, "cqe should exist"
@@ -454,7 +465,7 @@ assert cqe.local_qpn() == qp.qpn()
 assert cqe.sqpn() == dst_qpn
 assert cqe.len() == sg.len()
 assert cqe.op() == WC_OPCODE.SEND
-assert cqe.status() == WC_STATUS.RNR_RETRY_EXC_ERR
+assert cqe.status() == cqe_err_status
 assert qp.status() == QPS.ERR
 
 
