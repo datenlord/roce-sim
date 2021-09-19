@@ -152,15 +152,10 @@ qp.modify_qp(
     min_rnr_timer=src_rnr_timer_num,
     rq_psn=dst_start_psn,
 )
-# # Setup QP, post receive
-# sg = SG(pos_in_mr=POS_IN_MR, length=mr.len() - POS_IN_MR, lkey=mr.lkey())
-# rr = RecvWR(sgl=sg)
-# qp.post_recv(rr)
 
 # Exchange receive ready
 udp_sock.sendto(struct.pack("<i", ReceiveReady), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-# logging.debug(struct.unpack('<i', exch_data))
 
 qp.modify_qp(
     qps=QPS.RTS,
@@ -186,7 +181,7 @@ logging.info(f"Case {case_no} start...")
 send_size = MSG_SIZE
 udp_sock.sendto(struct.pack("<iq", SendSize, send_size), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-logging.debug(struct.unpack("<iq", exch_data))
+_ = struct.unpack("<iq", exch_data)
 
 # RoCE send and ack
 sg = SG(pos_in_mr=POS_IN_MR, length=send_size, lkey=mr.lkey())
@@ -220,7 +215,6 @@ udp_sock.sendto(struct.pack("<iq", ReadSize, read_size), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 parsed_fields = struct.unpack("<iq", exch_data)
 _, read_size = parsed_fields
-logging.debug(parsed_fields)
 
 # RoCE read and ack
 mr.write(byte_data=b"00000000abcdefghijklmnopqrstuvwxyz")
@@ -240,7 +234,6 @@ udp_sock.sendto(struct.pack("<iq", WriteSize, -1), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 parsed_fields = struct.unpack("<iq", exch_data)
 _, write_size = parsed_fields
-logging.debug(parsed_fields)
 
 # RoCE write and ack
 write_req_pkt_num = Util.compute_wr_pkt_num(write_size, qp.mtu())
@@ -258,8 +251,7 @@ logging.info(f"Case {case_no} start...")
 # Exchange write imm
 udp_sock.sendto(struct.pack("<i", WriteImm), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-parsed_fields = struct.unpack("<i", exch_data)
-logging.debug(parsed_fields)
+_ = struct.unpack("<i", exch_data)
 
 # RoCE write imm and ack
 sg = SG(pos_in_mr=0, length=0, lkey=mr.lkey())
@@ -285,8 +277,7 @@ assert cqe.status() == WC_STATUS.SUCCESS
 # Exchange write done
 udp_sock.sendto(struct.pack("<i", WriteDone), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-parsed_fields = struct.unpack("<i", exch_data)
-logging.debug(parsed_fields)
+_ = struct.unpack("<i", exch_data)
 
 ###############################################################################
 # Case 5: server write imm with no data to client, normal case
@@ -298,7 +289,7 @@ logging.info(f"Case {case_no} start...")
 # Exchange atomic ready
 udp_sock.sendto(struct.pack("<i", AtomicReady), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-logging.debug(struct.unpack("<i", exch_data))
+_ = struct.unpack("<i", exch_data)
 
 # RoCE atomic and ack
 sg = SG(pos_in_mr=POS_IN_MR, length=8, lkey=mr.lkey())
@@ -347,7 +338,6 @@ udp_sock.sendto(struct.pack("<iq", ReadFailSize, MSG_SIZE), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 parsed_fields = struct.unpack("<iq", exch_data)
 _, read_size = parsed_fields
-logging.debug(f"parsed_fields={parsed_fields}")
 
 # RoCE read and ack
 roce.recv_pkts(1)
@@ -388,7 +378,6 @@ exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack("<iq", SendOverSize, -1), peer_addr)
 parsed_fields = struct.unpack("<iq", exch_data)
 _, send_size = parsed_fields
-logging.debug(f"send_size={send_size}")
 
 # RoCE send and ack
 assert zero_mr_size < send_size
@@ -421,7 +410,7 @@ qp.modify_qp(qps=QPS.RTS, sq_psn=sq_psn, rq_psn=rq_psn)
 send_size = MSG_SIZE
 udp_sock.sendto(struct.pack("<iq", SendRetryRNR, send_size), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-logging.debug(struct.unpack("<iq", exch_data))
+_ = struct.unpack("<iq", exch_data)
 
 # RoCE send and ack
 sg = SG(pos_in_mr=POS_IN_MR, length=send_size, lkey=mr.lkey())
@@ -465,14 +454,17 @@ udp_sock.sendto(struct.pack("<iq", SendRetrySeq, -1), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 parsed_fields = struct.unpack("<iq", exch_data)
 _, send_size = parsed_fields
-logging.debug(struct.unpack("<iq", exch_data))
 
 # RoCE send and RNR NAK
 send_req_pkt_num = Util.compute_wr_pkt_num(send_size, qp.mtu())
 total_retry_cnt = None
 if qp.rnr_retry > qp.retry_cnt:
+    # In this case, the retry limit is retry_cnt
+    # Total retry count is first normal try + retry_cnt + retry_cnt - 1
     total_retry_cnt = 1 + qp.retry_cnt + qp.retry_cnt - 1
 else:
+    # In this case, the retry limit is rnr_retry
+    # Total retry count is first normal try + rnr_retry - 1 + rnr_retry -1
     total_retry_cnt = 1 + qp.rnr_retry - 1 + qp.rnr_retry - 1
 roce.recv_pkts(npkt=total_retry_cnt * send_req_pkt_num)
 cqe = qp.poll_cq()

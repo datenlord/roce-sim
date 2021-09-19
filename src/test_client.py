@@ -69,11 +69,9 @@ udp_sock.bind(client_bind_addr)
 srv_addr = (arg_res.dst_ip, DST_PORT)
 udp_sock.sendto(struct.pack("c", b"1"), srv_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-# logging.debug(struct.unpack('<c', exch_data))
 
 # Receive metadata
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-# logging.debug(f'len(exch_data)={len(exch_data)}, exch_data={exch_data}')
 parsed_fields = struct.unpack("!BBBBBIQIIB16s", exch_data)
 (
     dst_retry_cnt,
@@ -137,8 +135,7 @@ logging.info(f"Case {case_no} start...")
 # Exchange send imm
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack("<i", SendImm), peer_addr)
-parsed_fields = struct.unpack("<i", exch_data)
-# logging.debug(struct.unpack('<i', exch_data))
+_ = struct.unpack("<i", exch_data)
 
 # RoCE send imm and ack
 src_npsn = src_cpsn + 1
@@ -187,8 +184,7 @@ logging.info(f"Case {case_no} start...")
 # Exchange write imm
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack("<i", WriteImm), peer_addr)
-parsed_fields = struct.unpack("<i", exch_data)
-# logging.debug(parsed_fields)
+_ = struct.unpack("<i", exch_data)
 
 # RoCE write with imm and RNR retry and ack
 src_npsn = src_cpsn + 1
@@ -235,8 +231,7 @@ logging.info(f"Case {case_no} start...")
 # Exchange read zero
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack("<i", ReadZero), peer_addr)
-parsed_fields = struct.unpack("<i", exch_data)
-# logging.debug(parsed_fields)
+_ = struct.unpack("<i", exch_data)
 
 # RoCE read zero and ack
 src_npsn = src_cpsn + 1
@@ -274,8 +269,6 @@ exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack("<iq", SendImmSize, -1), peer_addr)
 parsed_fields = struct.unpack("<iq", exch_data)
 _, send_size = parsed_fields
-# logging.debug(f'send_size={send_size}')
-# logging.debug(parsed_fields)
 
 # RoCE send and NAK seq err retry without ACK
 send_pkt_num = Util.compute_wr_pkt_num(send_size, PMTU)
@@ -345,7 +338,6 @@ logging.info(f"Case {case_no} start...")
 # Exchange atomic ready
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack("<i", AtomicReady), peer_addr)
-# logging.debug(struct.unpack('<i', exch_data))
 
 # RoCE atomic and ack
 src_npsn = src_cpsn + 1
@@ -356,7 +348,6 @@ atomic_bth = BTH(
     ackreq=True,
 )
 aligned_dst_va = ((dst_va + 7) >> 3) << 3
-# logging.debug(f'aligned dst va={aligned_dst_va}, dst va={dst_va}')
 atomic_eth = AtomicETH(
     va=aligned_dst_va,
     rkey=dst_rkey,
@@ -424,9 +415,8 @@ write_zero_resp = (
     / AETH(code="ACK", value=31, msn=1)
 )
 write_zero_resp.show()
-send(
-    write_zero_resp
-)  # This response will implicitely NAK both atomic and write operation
+# This response will implicitely NAK both atomic and write operation
+send(write_zero_resp)
 
 # RoCE atomic retry
 roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
@@ -468,11 +458,9 @@ logging.info(f"Case {case_no} start...")
 write_size = MSG_SIZE
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack("<iq", WriteImmSize, write_size), peer_addr)
-# logging.debug(struct.unpack('<iq', exch_data))
 
 # RoCE write imm, rnr retry and ack
 write_req_pkt_num = Util.compute_wr_pkt_num(write_size, PMTU)
-# logging.debug(f'write request packet num={write_req_pkt_num}')
 for i in range(write_req_pkt_num):
     roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
     write_req = BTH(roce_bytes)
@@ -527,8 +515,6 @@ exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack("<iq", SendSize, -1), peer_addr)
 parsed_fields = struct.unpack("<iq", exch_data)
 _, send_size = parsed_fields
-# logging.debug(f'send_size={send_size}')
-# logging.debug(parsed_fields)
 
 # RoCE send and rnr retry without ack
 send_pkt_num = Util.compute_wr_pkt_num(send_size, PMTU)
@@ -578,7 +564,6 @@ exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack("<iq", ReadSize, read_size), peer_addr)
 parsed_fields = struct.unpack("<iq", exch_data)
 _, read_size = parsed_fields
-# logging.debug(parsed_fields)
 
 # RoCE read, nak seq retry and ack
 roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
@@ -763,7 +748,6 @@ logging.info(f"Case {case_no} start...")
 send_size = MSG_SIZE
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack("<iq", SendInv, send_size), peer_addr)
-# logging.debug(struct.unpack('<iq', exch_data))
 
 # RoCE atomic
 roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
@@ -774,7 +758,6 @@ assert atomic_req[BTH].psn == src_epsn, "atomic request PSN not match ePSN"
 roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
 atomic_req = BTH(roce_bytes)
 atomic_req.show()
-# logging.debug(f'atomic_req[BTH].psn={atomic_req[BTH].psn}, src_epsn={src_epsn}')
 assert atomic_req[BTH].psn == src_epsn, "atomic request PSN not match ePSN"
 # RoCE send with inv
 roce_bytes, peer_addr = roce_sock.recvfrom(UDP_BUF_SIZE)
@@ -815,8 +798,7 @@ src_epsn += 2
 # Exchange send done
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 udp_sock.sendto(struct.pack("<i", SendDone), peer_addr)
-parsed_fields = struct.unpack("<i", exch_data)
-# logging.debug(parsed_fields)
+_ = struct.unpack("<i", exch_data)
 
 ###############################################################################
 # Case 11: server write to client retry due to wrong PSN and exceed the retry limit
@@ -830,7 +812,6 @@ udp_sock.sendto(struct.pack("<iq", WriteRetrySeq, -1), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 parsed_fields = struct.unpack("<iq", exch_data)
 _, write_size = parsed_fields
-logging.debug(parsed_fields)
 
 # RoCE write imm, NAK sequence error retry and exceed retry limit
 write_req_pkt_num = Util.compute_wr_pkt_num(write_size, PMTU)

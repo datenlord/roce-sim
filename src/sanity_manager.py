@@ -10,6 +10,7 @@ except ImportError:
 
 MANAGER_VERSION = "0.0.1"
 
+
 class SanityManager:
     def __init__(self, test_case_file):
         self._config = Configure(yaml.load(open(test_case_file, "r"), Loader=Loader))

@@ -965,7 +965,8 @@ class RespLogic:
                 cqe = self.ack_send_or_write_req(unacked_wr_ssn)
                 implicit_ack_wr_num += 1
                 if cqe is not None:
-                    self.cq().push(cqe)
+                    # Do not generate CQE for implicit ACK-ed send and write operations
+                    # self.cq().push(cqe)
                     # Delete completed WR
                     self.send_q.delete_wr(unacked_wr_ssn)
             # Update min_unacked_psn up to the input response PSN (which is not ACK yet)
@@ -1026,7 +1027,7 @@ class RespLogic:
                 )
                 return cqe
             return None
-        else:  # Implicit NAK
+        else:  # Implicit NAK for read and atomic operations
             psn_to_retry = wr_ctx.first_psn()
             logging.info(
                 f"SQ={self.sqpn()} has implicit ACK-ed packtes, \

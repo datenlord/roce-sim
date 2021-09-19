@@ -2,6 +2,7 @@ name: CI
 on:
   pull_request:
     branches: [master]
+  schedule: [cron: "12 */24 * * *"]
 
 jobs:
   build-and-simulate:
@@ -21,12 +22,15 @@ jobs:
           python3 -m pip install grpcio
           python3 -m pip install grpcio-tools
           pip install --upgrade protobuf
+          pip install black
           cargo install protobuf-codegen
           cargo install grpcio-compiler
           ./test/setup.sh
       - name: Compile
         run: |
-          ./build.sh
+          # Python format check
+          black --check `find ./src -name "*.py"`
+          ./build_proto.sh
           cargo build
           docker build -t grpc-python3 ./test
       - name: Run
