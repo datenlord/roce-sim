@@ -302,6 +302,44 @@ def remote_send(
     return True
 
 
+def remote_atomic_cas(
+    c_arg,
+    self_side: Side,
+    self_info: SideInfo,
+    self_stub: SideStub,
+    other_side: Side,
+    other_info: SideInfo,
+    other_stub: SideStub,
+):
+    offset = c_arg.get("offset", 0)
+    remote_offset = c_arg.get("remote_offset", 0)
+    old_value = c_arg.get("old_value")
+    new_value = c_arg.get("new_value")
+
+    if not old_value:
+        print("old_value should be set")
+        return False
+
+    if not new_value:
+        print("new_value should be set")
+        return False
+
+    self_stub.RemoteAtomicCas(
+        message_pb2.RemoteAtomicCasRequest(
+            addr=(self_info.addr + offset),
+            lkey=self_info.lkey,
+            remote_addr=(other_info.addr + remote_offset),
+            remote_key=other_info.rkey,
+            old_value=old_value,
+            new_value=new_value,
+            qp_id=self_info.qp_id,
+            cq_id=self_info.cq_id,
+        )
+    )
+
+    return True
+
+
 def local_recv(
     c_arg,
     self_side: Side,
@@ -348,6 +386,7 @@ COMMAND_MAP: Final = {
     "remote_read": remote_read,
     "remote_write": remote_write,
     "remote_send": remote_send,
+    "remote_atomic_cas": remote_atomic_cas,
     "local_recv": local_recv,
     "unblock_other": unblock_other,
 }

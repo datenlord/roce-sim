@@ -10,8 +10,9 @@ use lazy_static::lazy_static;
 use proto::message::{
     ConnectQpResponse, CreateCqResponse, CreateMrResponse, CreatePdResponse, CreateQpResponse,
     LocalCheckMemResponse, LocalRecvResponse, LocalWriteResponse, OpenDeviceResponce,
-    QueryGidResponse, QueryPortResponse, RecvPktResponse, RemoteReadResponse, RemoteSendResponse,
-    RemoteWriteResponse, UnblockRetryResponse, VersionResponse,
+    QueryGidResponse, QueryPortResponse, RecvPktResponse, RemoteAtomicCasResponse,
+    RemoteReadResponse, RemoteSendResponse, RemoteWriteResponse, UnblockRetryResponse,
+    VersionResponse,
 };
 use proto::side_grpc::{self, Side};
 use std::collections::HashMap;
@@ -24,6 +25,7 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
 use utilities::Cast;
+use log::debug;
 
 fn main() -> anyhow::Result<()> {
     let env = Arc::new(Environment::new(1));
@@ -84,7 +86,7 @@ impl Side for SideImpl {
         req: proto::message::OpenDeviceRequest,
         sink: grpcio::UnarySink<proto::message::OpenDeviceResponce>,
     ) {
-        print!("Get open_device request");
+        debug!("Get open_device request");
         let (ibv_context, dev_name) = rdma::ibv::open_ib_ctx(&req.dev_name);
         DEV_MAP
             .write()
@@ -168,7 +170,7 @@ impl Side for SideImpl {
         req: proto::message::CreateQpRequest,
         sink: grpcio::UnarySink<proto::message::CreateQpResponse>,
     ) {
-        print!("cq_id {}, pd_id {}", req.get_cq_id(), req.get_pd_id());
+        debug!("cq_id {}, pd_id {}", req.get_cq_id(), req.get_pd_id());
         let qp = rdma::ibv::create_qp(
             CQ_MAP
                 .read()
@@ -222,7 +224,7 @@ impl Side for SideImpl {
             remote_lid.cast(),
             u128::from_be_bytes(remote_gid),
         );
-        print!(
+        debug!(
             "Transfer to RTS, qp = {:?}, timeout = {}, retry_cnt = {}, rnr_retry = {}",
             (*qp).inner,
             timeout,
@@ -292,6 +294,38 @@ impl Side for SideImpl {
         );
 
         let resp = RemoteWriteResponse::default();
+        let f = sink.success(resp).map_err(|_| {}).map(|_| ());
+        ctx.spawn(f)
+    }
+
+    fn remote_atomic_cas(
+        &mut self,
+        ctx: grpcio::RpcContext,
+        req: proto::message::RemoteAtomicCasRequest,
+        sink: grpcio::UnarySink<proto::message::RemoteAtomicCasResponse>,
+    ) {
+        rdma::ibv::remote_atomic_cas(
+            req.addr,
+            8,
+            req.lkey,
+            req.get_remote_addr(),
+            req.get_remote_key(),
+            req.old_value,
+            req.new_value,
+            *QP_MAP
+                .read()
+                .unwrap()
+                .get(req.get_qp_id().cast::<usize>())
+                .unwrap(),
+            CQ_MAP
+                .read()
+                .unwrap()
+                .get(req.get_cq_id().cast::<usize>())
+                .unwrap()
+                .0,
+        );
+
+        let resp = RemoteAtomicCasResponse::default();
         let f = sink.success(resp).map_err(|_| {}).map(|_| ());
         ctx.spawn(f)
     }
@@ -385,7 +419,7 @@ impl Side for SideImpl {
         req: proto::message::QueryPortRequest,
         sink: grpcio::UnarySink<proto::message::QueryPortResponse>,
     ) {
-        println!("device name is {}", req.dev_name);
+        debug!("device name is {}", req.dev_name);
         let local_dev_map = DEV_MAP.read().unwrap();
         let ibv_ctx = local_dev_map.get(&req.dev_name).unwrap();
         let port_attr = rdma::ibv::query_port(*ibv_ctx, req.ib_port_num.cast());
@@ -427,7 +461,7 @@ impl Side for SideImpl {
         let len: usize = req.get_len().cast();
 
         let vec = &mut (*mem).deref_mut()[offset..(offset + len)];
-        println!(
+        debug!(
             "local len {}, new content len {}",
             vec.len(),
             req.get_content().len()
@@ -465,6 +499,10 @@ impl Side for SideImpl {
             .unwrap_or(expected.len().cmp(&values.len()))
             == std::cmp::Ordering::Equal;
         resp.set_same(is_eq);
+
+        if !is_eq {
+            debug!("local check real data {:?}", values);
+        }
 
         let f = sink.success(resp).map_err(|_| {}).map(|_| ());
         ctx.spawn(f);
