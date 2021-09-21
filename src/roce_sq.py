@@ -1127,7 +1127,11 @@ class RespLogic:
             logging.error("AtomicAckETH size not correct")
             return (WC_STATUS.LOC_LEN_ERR, atomic_ack_psn)
         atomic_mr = self.pd().get_mr(atomic_lkey)
-        atomic_mr.write(byte_data=atomic_ack[Raw].load, addr=atomic_laddr)
+        original_data = bytearray(atomic_ack[Raw].load)
+        # the network is big endian, should convert to local system endian
+        if sys.byteorder == "little":
+            original_data.reverse()
+        atomic_mr.write(byte_data=original_data, addr=atomic_laddr)
         atomic_cqe = CQE(
             wr_id=atomic_wr_ctx.wr().id(),
             status=WC_STATUS.SUCCESS,

@@ -10,6 +10,7 @@ from proto.message_pb2 import (
     OpenDeviceResponce,
     QueryPortResponse,
     RecvPktResponse,
+    RemoteAtomicCasResponse,
     RemoteReadRequest,
     RemoteSendResponse,
     RemoteWriteRequest,
@@ -25,6 +26,7 @@ from roce_enum import ACCESS_FLAGS, SEND_FLAGS, WR_OPCODE
 from roce_v2 import RecvWR, RoCEv2, SG, SendWR, QPS
 from threading import Lock
 import time
+import logging
 
 GLOBAL_ROCE = RoCEv2()
 pd_lock = Lock()
@@ -47,7 +49,7 @@ class SanitySide(SideServicer):
         return VersionResponse(version="0.1")
 
     def OpenDevice(self, request, context):
-        print("request device name is {}".format(request.dev_name))
+        logging.debug("request device name is {}".format(request.dev_name))
         return OpenDeviceResponce(dev_name="dev_name")
 
     def CreatePd(self, request, context):
@@ -165,6 +167,22 @@ class SanitySide(SideServicer):
         qp.process_one_sr()
         return RemoteSendResponse()
 
+    def RemoteAtomicCas(self, request, context):
+        sg = SG(pos_in_mr=request.addr, length=8, lkey=request.lkey)
+        sr = SendWR(
+            opcode=WR_OPCODE.ATOMIC_CMP_AND_SWP,
+            sgl=sg,
+            send_flags=SEND_FLAGS.SIGNALED,
+            rmt_va=request.remote_addr,
+            rkey=request.remote_key,
+            compare_add=request.old_value,
+            swap=request.new_value,
+        )
+        qp = qp_list[request.qp_id]
+        qp.post_send(sr)
+        qp.process_one_sr()
+        return RemoteAtomicCasResponse()
+
     def RecvPkt(self, request, context):
         retry_handler = default_retry_handler if request.wait_for_retry else None
         GLOBAL_ROCE.recv_pkts(1, retry_handler=retry_handler)
@@ -176,6 +194,7 @@ class SanitySide(SideServicer):
     def LocalCheckMem(self, request, context):
         mr = mr_list[request.mr_id]
         read = mr.byte_data[request.offset : (request.offset + request.len)]
+        logging.debug(f"local check real data {read}")
         return LocalCheckMemResponse(same=(bytearray(request.expected) == read))
 
     def LocalRecv(self, request, context):
@@ -199,14 +218,14 @@ class SanitySide(SideServicer):
 
 def default_retry_handler():
     global retry_flag, retry_lock
-    print("Block")
+    logging.debug("Block")
     with retry_lock:
         retry_flag = True
 
     while retry_flag:
         time.sleep(1)
 
-    print("Get unblock signal")
+    logging.debug("Get unblock signal")
 
 
 if __name__ == "__main__":

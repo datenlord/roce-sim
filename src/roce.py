@@ -285,8 +285,8 @@ class AtomicETH(Packet):
     fields_desc = [
         XLongField("va", 0),
         XIntField("rkey", 0),
-        XLongField("comp", 0),
         XLongField("swap", 0),
+        XLongField("comp", 0),
     ]
 
 

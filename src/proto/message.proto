@@ -178,3 +178,17 @@ message RemoteWriteRequest {
 
 message RemoteWriteResponse {
 }
+
+message RemoteAtomicCasRequest {
+    uint64 addr = 1;
+    uint32 lkey = 2;
+    uint64 remote_addr = 3;
+    uint32 remote_key = 4;
+    uint64 old_value = 5;
+    uint64 new_value = 6;
+    uint32 qp_id = 7;
+    uint32 cq_id = 8;
+}
+
+message RemoteAtomicCasResponse {
+}
