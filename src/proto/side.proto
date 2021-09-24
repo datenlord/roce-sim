@@ -20,4 +20,5 @@ service Side {
     rpc RemoteSend(RemoteSendRequest) returns (RemoteSendResponse) {}
     rpc RemoteWrite(RemoteWriteRequest) returns (RemoteWriteResponse) {}
     rpc RemoteAtomicCas(RemoteAtomicCasRequest) returns (RemoteAtomicCasResponse) {}
+    rpc PollComplete(PollCompleteRequest) returns (PollCompleteResponse) {}
 }
