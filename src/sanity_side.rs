@@ -10,22 +10,22 @@ use lazy_static::lazy_static;
 use proto::message::{
     ConnectQpResponse, CreateCqResponse, CreateMrResponse, CreatePdResponse, CreateQpResponse,
     LocalCheckMemResponse, LocalRecvResponse, LocalWriteResponse, OpenDeviceResponce,
-    QueryGidResponse, QueryPortResponse, RecvPktResponse, RemoteAtomicCasResponse,
-    RemoteReadResponse, RemoteSendResponse, RemoteWriteResponse, UnblockRetryResponse,
-    VersionResponse,
+    PollCompleteResponse, QueryGidResponse, QueryPortResponse, RecvPktResponse,
+    RemoteAtomicCasResponse, RemoteReadResponse, RemoteSendResponse, RemoteWriteResponse,
+    UnblockRetryResponse, VersionResponse,
 };
 use proto::side_grpc::{self, Side};
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::env;
 //use std::io::{self, Read};
+use log::debug;
 use std::ops::DerefMut;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
 use utilities::Cast;
-use log::debug;
 
 fn main() -> anyhow::Result<()> {
     let env = Arc::new(Environment::new(1));
@@ -347,6 +347,17 @@ impl Side for SideImpl {
                 .unwrap(),
         );
 
+        let resp = LocalRecvResponse::default();
+        let f = sink.success(resp).map_err(|_| {}).map(|_| ());
+        ctx.spawn(f)
+    }
+
+    fn poll_complete(
+        &mut self,
+        ctx: grpcio::RpcContext,
+        req: proto::message::PollCompleteRequest,
+        sink: grpcio::UnarySink<proto::message::PollCompleteResponse>,
+    ) {
         rdma::ibv::poll_completion(
             CQ_MAP
                 .read()
@@ -356,7 +367,7 @@ impl Side for SideImpl {
                 .0,
         );
 
-        let resp = LocalRecvResponse::default();
+        let resp = PollCompleteResponse::default();
         let f = sink.success(resp).map_err(|_| {}).map(|_| ());
         ctx.spawn(f)
     }

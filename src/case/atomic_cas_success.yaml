@@ -3,21 +3,21 @@ side_1:
   - name: local_write
     offset: 0
     content: '01000000'
-  - name: sleep
-    len: 2
+  - name: barrier
+  - name: barrier
   - name: local_check
     offset: 0
     expected: '02000000'
 side_2:
   - name: connect_qp
-  - name: sleep
-    len: 1
+  - name: barrier
   - name: remote_atomic_cas
     offset: 0
     remote_offset: 0
     old_value: 1
     new_value: 2
   - name: recv_pkt
+  - name: barrier
   - name: local_check
     offset: 0
     expected: '01000000'

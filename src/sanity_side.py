@@ -8,6 +8,7 @@ from proto.message_pb2 import (
     LocalRecvResponse,
     LocalWriteResponse,
     OpenDeviceResponce,
+    PollCompleteResponse,
     QueryPortResponse,
     RecvPktResponse,
     RemoteAtomicCasResponse,
@@ -25,6 +26,7 @@ from sys import argv
 from roce_enum import ACCESS_FLAGS, SEND_FLAGS, WR_OPCODE
 from roce_v2 import RecvWR, RoCEv2, SG, SendWR, QPS
 from threading import Lock
+from functools import partial
 import time
 import logging
 
@@ -38,7 +40,7 @@ cq_list = []
 qp_lock = Lock()
 qp_list = []
 retry_lock = Lock()
-retry_flag = False
+retry_count = 0
 
 
 class SanitySide(SideServicer):
@@ -124,11 +126,11 @@ class SanitySide(SideServicer):
         return LocalWriteResponse()
 
     def UnblockRetry(self, request, context):
-        global retry_flag, retry_lock
-        while not retry_flag:
+        global retry_count, retry_lock
+        while retry_count == 0:
             time.sleep(0.1)
         with retry_lock:
-            retry_flag = False
+            retry_count -= 1
         return UnblockRetryResponse()
 
     def RemoteRead(self, request, context):
@@ -184,7 +186,11 @@ class SanitySide(SideServicer):
         return RemoteAtomicCasResponse()
 
     def RecvPkt(self, request, context):
-        retry_handler = default_retry_handler if request.wait_for_retry else None
+        retry_handler = (
+            partial(default_retry_handler, request.wait_for_retry)
+            if request.wait_for_retry
+            else None
+        )
         GLOBAL_ROCE.recv_pkts(1, retry_handler=retry_handler)
         if request.has_cqe:
             qp = qp_list[request.qp_id]
@@ -215,14 +221,19 @@ class SanitySide(SideServicer):
             + bytes(map(int, self.ip.split(".")))
         )
 
+    def PollComplete(self, request, context):
+        qp = qp_list[request.qp_id]
+        qp.poll_cq()
+        return PollCompleteResponse()
 
-def default_retry_handler():
-    global retry_flag, retry_lock
+
+def default_retry_handler(barrier_cnt):
+    global retry_count, retry_lock
     logging.debug("Block")
     with retry_lock:
-        retry_flag = True
+        retry_count += barrier_cnt
 
-    while retry_flag:
+    while retry_count:
         time.sleep(1)
 
     logging.debug("Get unblock signal")

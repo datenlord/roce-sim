@@ -7,11 +7,14 @@ import os
 import yaml
 import concurrent.futures
 import time
+import threading
 
 try:
     from yaml import CLoader as Loader
 except ImportError:
     from yaml import Loader
+
+GlobalBarrier = threading.Barrier(2, timeout=10)
 
 
 class SideInfo:
@@ -164,7 +167,7 @@ def recv_pkt(
     other_info: SideInfo,
     other_stub: SideStub,
 ):
-    retry = c_arg.get("wait_for_retry", False)
+    retry = c_arg.get("wait_for_retry", 0)
     self_stub.RecvPkt(
         message_pb2.RecvPktRequest(
             wait_for_retry=retry, has_cqe=True, qp_id=self_info.qp_id
@@ -377,6 +380,37 @@ def unblock_other(
     return True
 
 
+def barrier(
+    c_arg,
+    self_side: Side,
+    self_info: SideInfo,
+    self_stub: SideStub,
+    other_side: Side,
+    other_info: SideInfo,
+    other_stub: SideStub,
+):
+    GlobalBarrier.wait()
+    return True
+
+
+def poll_complete(
+    c_arg,
+    self_side: Side,
+    self_info: SideInfo,
+    self_stub: SideStub,
+    other_side: Side,
+    other_info: SideInfo,
+    other_stub: SideStub,
+):
+    self_stub.PollComplete(
+        message_pb2.PollCompleteRequest(
+            qp_id=self_info.qp_id,
+            cq_id=self_info.cq_id,
+        )
+    )
+    return True
+
+
 COMMAND_MAP: Final = {
     "connect_qp": connect_qp,
     "sleep": sleep,
@@ -389,6 +423,8 @@ COMMAND_MAP: Final = {
     "remote_atomic_cas": remote_atomic_cas,
     "local_recv": local_recv,
     "unblock_other": unblock_other,
+    "barrier": barrier,
+    "poll_complete": poll_complete,
 }
 
 

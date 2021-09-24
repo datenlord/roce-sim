@@ -4,8 +4,9 @@ side_1:
   - name: local_recv
     offset: 0
     len: 1
-  - name: sleep
-    len: 2
+  - name: unblock_other
+  - name: barrier
+  - name: poll_complete
   - name: local_check
     offset: 0
     expected: 'ff'
@@ -17,5 +18,6 @@ side_2:
   - name: remote_send
     len: 1
   - name: recv_pkt
-    wait_for_retry: true
+    wait_for_retry: 2
   - name: recv_pkt
+  - name: barrier
