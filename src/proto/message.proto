@@ -93,6 +93,14 @@ message ConnectQpRequest {
     uint32 timeout = 9;
     uint32 retry = 10;
     uint32 rnr_retry = 11;
+
+    uint32 mtu = 12;
+    uint32 sq_start_psn = 13;
+    uint32 rq_start_psn = 14;
+    uint32 max_rd_atomic = 15;
+    uint32 max_dest_rd_atomic = 16;
+    uint32 min_rnr_timer = 17;
+    
 }
 
 message ConnectQpResponse {

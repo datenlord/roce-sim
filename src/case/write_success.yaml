@@ -1,4 +1,5 @@
 side_1: 
+  - name: prepare
   - name: connect_qp
   - name: barrier
   - name: barrier
@@ -6,6 +7,7 @@ side_1:
     offset: 0
     expected: 'ff'
 side_2:
+  - name: prepare
   - name: connect_qp
   - name: local_write
     offset: 0
