@@ -8,6 +8,7 @@ import yaml
 import concurrent.futures
 import time
 import threading
+import logging
 
 try:
     from yaml import CLoader as Loader
@@ -58,8 +59,6 @@ class TestCase:
         self.side2 = side2
 
     def run(self, test_name):
-        info1 = prepare(self.side1, self.stub1)
-        info2 = prepare(self.side2, self.stub2)
         test_def_dir = os.getenv(TestCase.TEST_DEF_DIR_ENV)
         if not test_def_dir:
             test_def_dir = TestCase.DEFAULT_TEST_DEF_DIR
@@ -68,11 +67,20 @@ class TestCase:
         try:
             test = yaml.load(open(test_file_name, "r"), Loader=Loader)
         except Exception as e:
-            print(f"Error to parse test file {test_file_name}")
+            logging.error(f"Error to parse test file {test_file_name}")
             raise e
 
         side1_cmd = test.get("side_1")
         side2_cmd = test.get("side_2")
+
+        try:
+            info1, side1_cmd = prepare(side1_cmd, self.side1, self.stub1)
+            info2, side2_cmd = prepare(side2_cmd, self.side2, self.stub2)
+        except Exception as e:
+            logging.error(
+                f"Error when run prepare command for file {test_file_name}, {e}"
+            )
+            raise e
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             cmd_future = []
@@ -107,9 +115,9 @@ class TestCase:
             for f in concurrent.futures.as_completed(cmd_future):
                 try:
                     if not f.result():
-                        print(f"{future2side[f]} command failed")
+                        logging.error(f"{future2side[f]} command failed")
                 except Exception as e:
-                    print(
+                    logging.error(
                         f"get an exception from {future2side[f]} command: {format(e)}"
                     )
 
@@ -126,11 +134,19 @@ def connect_qp(
     timeout = c_arg.get("timeout", 14)
     retry = c_arg.get("retry", 7)
     rnr_retry = c_arg.get("rnr_retry", 7)
+    qp_flag = c_arg.get("qp_flag", 15)
+    mtu = c_arg.get("mtu", 1024)
+    sq_start_psn = c_arg.get("sq_start_psn", 0)
+    rq_start_psn = c_arg.get("rq_start_psn", 0)
+    max_rd_atomic = c_arg.get("max_rd_atomic", 1)
+    max_dest_rd_atomic = c_arg.get("max_dest_rd_atomic", 1)
+    min_rnr_timer = c_arg.get("min_rnr_timer", 0x12)
+
     self_stub.ConnectQp(
         message_pb2.ConnectQpRequest(
             dev_name=self_info.dev_name,
             qp_id=self_info.qp_id,
-            access_flag=15,
+            access_flag=qp_flag,
             gid_idx=self_side.gid_idx(),
             ib_port_num=self_side.ib_port(),
             remote_qp_num=other_info.qp_num,
@@ -139,6 +155,12 @@ def connect_qp(
             timeout=timeout,
             retry=retry,
             rnr_retry=rnr_retry,
+            mtu=mtu,
+            sq_start_psn=sq_start_psn,
+            rq_start_psn=rq_start_psn,
+            max_rd_atomic=max_rd_atomic,
+            max_dest_rd_atomic=max_dest_rd_atomic,
+            min_rnr_timer=min_rnr_timer,
         )
     )
     return True
@@ -188,7 +210,7 @@ def local_check(
     offset = c_arg.get("offset", 0)
     expected = c_arg.get("expected")
     if not expected:
-        print("should set expected in local_check")
+        logging.error("should set expected in local_check")
         return False
     expected = bytes.fromhex(expected)
 
@@ -198,9 +220,9 @@ def local_check(
         )
     )
     if resp.same:
-        print("value read correct")
+        logging.info("value read correct")
     else:
-        print("value read INCORRECT")
+        logging.info("value read INCORRECT")
     return resp.same
 
 
@@ -216,7 +238,7 @@ def local_write(
     offset = c_arg.get("offset", 0)
     content = c_arg.get("content")
     if not content:
-        print("should set content in local_write")
+        logging.error("should set content in local_write")
         return False
     content = bytes.fromhex(content)
     self_stub.LocalWrite(
@@ -320,11 +342,11 @@ def remote_atomic_cas(
     new_value = c_arg.get("new_value")
 
     if not old_value:
-        print("old_value should be set")
+        logging.error("old_value should be set")
         return False
 
     if not new_value:
-        print("new_value should be set")
+        logging.error("new_value should be set")
         return False
 
     self_stub.RemoteAtomicCas(
@@ -439,7 +461,7 @@ def process_command(
 ):
     for c in cmds:
         if not c["name"]:
-            print("command missing name")
+            logging.error("command missing name")
             return False
         fun = COMMAND_MAP[c["name"]]
         if fun:
@@ -453,23 +475,32 @@ def process_command(
                     other_info,
                     other_stub,
                 ):
-                    print(f'failed to executed command {c["name"]}')
+                    logging.error(f'failed to executed command {c["name"]}')
                     return False
             except Exception as e:
-                print(f'failed to executed command {c["name"]}, {e}')
+                logging.error(f'failed to executed command {c["name"]}, {e}')
                 return False
         else:
-            print(f'command {c["name"]} is not in the definition')
+            logging.error(f'command {c["name"]} is not in the definition')
             return False
     return True
 
 
-def prepare(side: Side, stub: SideStub):
+def prepare(cmds, side: Side, stub: SideStub):
+    first_cmd = cmds[0]
+    if first_cmd["name"] != "prepare":
+        raise RuntimeError(
+            f"first command should be prepare, but it's {first_cmd['name']}"
+        )
+
+    mr_len = first_cmd.get("mr_len", 1024)
+    mr_flag = first_cmd.get("mr_flag", 15)
+
     dev_name = side.dev_name()
     dev_name = dev_name if dev_name else ""
     response = stub.OpenDevice(message_pb2.OpenDeviceRequest(dev_name=dev_name))
     dev_name = response.dev_name
-    print(f"device name is {dev_name}")
+    logging.info(f"device name is {dev_name}")
 
     response = stub.QueryPort(
         message_pb2.QueryPortRequest(dev_name=dev_name, ib_port_num=side.ib_port())
@@ -491,7 +522,7 @@ def prepare(side: Side, stub: SideStub):
     pd_id = response.pd_id
 
     response = stub.CreateMr(
-        message_pb2.CreateMrRequest(pd_id=pd_id, len=1024, flag=15)
+        message_pb2.CreateMrRequest(pd_id=pd_id, len=mr_len, flag=mr_flag)
     )
     addr = response.addr
     len = response.len
@@ -505,6 +536,20 @@ def prepare(side: Side, stub: SideStub):
     qp_id = response.qp_id
     qp_num = response.qp_num
 
-    return SideInfo(
-        dev_name, lid, gid, cq_id, pd_id, addr, len, rkey, lkey, qp_id, qp_num, mr_id
+    return (
+        SideInfo(
+            dev_name,
+            lid,
+            gid,
+            cq_id,
+            pd_id,
+            addr,
+            len,
+            rkey,
+            lkey,
+            qp_id,
+            qp_num,
+            mr_id,
+        ),
+        cmds[1:],
     )

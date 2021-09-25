@@ -117,6 +117,12 @@ class SanitySide(SideServicer):
             timeout=request.timeout,
             retry_cnt=request.retry,
             rnr_retry=request.rnr_retry,
+            pmtu=request.mtu,
+            rq_psn=request.rq_start_psn,
+            sq_psn=request.sq_start_psn,
+            max_rd_atomic=request.max_rd_atomic,
+            max_dest_rd_atomic=request.max_dest_rd_atomic,
+            min_rnr_timer=request.min_rnr_timer,
         )
         return ConnectQpResponse()
 

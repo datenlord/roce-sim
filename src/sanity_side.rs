@@ -214,6 +214,12 @@ impl Side for SideImpl {
         let timeout = req.get_timeout();
         let retry_cnt = req.get_retry();
         let rnr_retry = req.get_rnr_retry();
+        let mtu = req.get_mtu();
+        let sq_start_psn = req.get_sq_start_psn();
+        let rq_start_psn = req.get_rq_start_psn();
+        let max_rd_atomic = req.get_max_rd_atomic();
+        let max_dest_rd_atomic = req.get_max_dest_rd_atomic();
+        let min_rnr_timer = req.get_min_rnr_timer();
 
         rdma::ibv::modify_qp_to_init(ib_port.cast(), *qp, rdma_sys::ibv_access_flags(flag.cast()));
         rdma::ibv::modify_qp_to_rtr(
@@ -223,6 +229,10 @@ impl Side for SideImpl {
             remote_qp_num,
             remote_lid.cast(),
             u128::from_be_bytes(remote_gid),
+            mtu,
+            rq_start_psn,
+            max_dest_rd_atomic.cast(),
+            min_rnr_timer.cast(),
         );
         debug!(
             "Transfer to RTS, qp = {:?}, timeout = {}, retry_cnt = {}, rnr_retry = {}",
@@ -231,7 +241,14 @@ impl Side for SideImpl {
             retry_cnt,
             rnr_retry
         );
-        rdma::ibv::modify_qp_to_rts(*qp, timeout.cast(), retry_cnt.cast(), rnr_retry.cast());
+        rdma::ibv::modify_qp_to_rts(
+            *qp,
+            timeout.cast(),
+            retry_cnt.cast(),
+            rnr_retry.cast(),
+            sq_start_psn,
+            max_rd_atomic.cast(),
+        );
 
         let resp = ConnectQpResponse::default();
         let f = sink.success(resp).map_err(|_| {}).map(|_| ());
