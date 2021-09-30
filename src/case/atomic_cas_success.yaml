@@ -7,8 +7,9 @@ side_1:
   - name: barrier
   - name: barrier
   - name: local_check
-    offset: 0
-    expected: '02000000'
+    seg: 
+      - offset: 0
+        expected: '02000000'
 side_2:
   - name: prepare
   - name: connect_qp
@@ -21,5 +22,6 @@ side_2:
   - name: recv_pkt
   - name: barrier
   - name: local_check
-    offset: 0
-    expected: '01000000'
+    seg: 
+      - offset: 0
+        expected: '01000000'

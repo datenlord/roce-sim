@@ -4,8 +4,9 @@ side_1:
   - name: barrier
   - name: barrier
   - name: local_check
-    offset: 0
-    expected: 'ff'
+    seg: 
+      - offset: 0
+        expected: 'ff'
 side_2:
   - name: prepare
   - name: connect_qp

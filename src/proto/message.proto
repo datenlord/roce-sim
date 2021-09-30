@@ -137,9 +137,8 @@ message UnblockRetryResponse {
 
 message LocalCheckMemRequest {
     uint32 mr_id = 1;
-    uint32 offset = 2;
-    uint32 len = 3;
-    bytes expected = 4;
+    repeated uint32 offset = 2;
+    repeated bytes expected = 3;
 }
 
 message LocalCheckMemResponse {
