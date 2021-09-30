@@ -205,9 +205,15 @@ class SanitySide(SideServicer):
 
     def LocalCheckMem(self, request, context):
         mr = mr_list[request.mr_id]
-        read = mr.byte_data[request.offset : (request.offset + request.len)]
-        logging.debug(f"local check real data {read}")
-        return LocalCheckMemResponse(same=(bytearray(request.expected) == read))
+        offset = request.offset
+        expected = request.expected
+
+        result = True
+        for i in range(len(offset)):
+            read = mr.byte_data[request.offset : (offset[i] + len(expected[i]))]
+            logging.debug(f"local check real data {read} for offset {offset[i]}")
+            result = result and (bytearray(expected[i]) == read)
+        return LocalCheckMemResponse(same=result)
 
     def LocalRecv(self, request, context):
         qp = qp_list[request.qp_id]

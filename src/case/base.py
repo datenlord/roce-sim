@@ -207,16 +207,19 @@ def local_check(
     other_info: SideInfo,
     other_stub: SideStub,
 ):
-    offset = c_arg.get("offset", 0)
-    expected = c_arg.get("expected")
-    if not expected:
-        logging.error("should set expected in local_check")
-        return False
-    expected = bytes.fromhex(expected)
+    offset = []
+    expected = []
+    for r in c_arg.get("seg"):
+        offset.append(r.get("offset", 0))
+        e = r.get("expected")
+        if not e:
+            logging.error("should set expected in local_check")
+            return False
+        expected.append(bytes.fromhex(e))
 
     resp = self_stub.LocalCheckMem(
         message_pb2.LocalCheckMemRequest(
-            mr_id=self_info.mr_id, offset=offset, len=len(expected), expected=expected
+            mr_id=self_info.mr_id, offset=offset, expected=expected
         )
     )
     if resp.same:

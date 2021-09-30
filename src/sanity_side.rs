@@ -512,25 +512,30 @@ impl Side for SideImpl {
             .get_mut(req.get_mr_id().cast::<usize>())
             .unwrap();
 
-        let offset: usize = req.get_offset().cast();
-        let len: usize = req.get_len().cast();
+        let offset = req.get_offset();
+        let expected = req.get_expected();
 
-        let values = &(**mem)[offset..(offset + len)];
-        let expected = req.expected;
-
-        let mut resp = LocalCheckMemResponse::default();
-        let is_eq = expected
+        let is_eq = offset
             .iter()
-            .zip(values)
-            .map(|(x, y)| x.cmp(y))
-            .find(|&ord| ord != std::cmp::Ordering::Equal)
-            .unwrap_or(expected.len().cmp(&values.len()))
-            == std::cmp::Ordering::Equal;
-        resp.set_same(is_eq);
+            .zip(expected)
+            .map(|(off, content)| -> bool {
+                let off_usize: usize = (*off).cast();
+                let value = &(**mem)[off_usize..(off_usize + content.len())];
+                debug!("local check real data {:?} for offset {}", value, off_usize);
+                content
+                    .iter()
+                    .zip(value)
+                    .map(|(x, y)| x.cmp(y))
+                    .find(|&ord| ord != std::cmp::Ordering::Equal)
+                    .unwrap_or(content.len().cmp(&value.len()))
+                    == std::cmp::Ordering::Equal
+            })
+            .filter(|cmp| -> bool { !cmp })
+            .count()
+            == 0;
 
-        if !is_eq {
-            debug!("local check real data {:?}", values);
-        }
+        let mut resp = LocalCheckMemResponse::new();
+        resp.set_same(is_eq);
 
         let f = sink.success(resp).map_err(|_| {}).map(|_| ());
         ctx.spawn(f);

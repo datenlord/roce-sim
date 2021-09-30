@@ -13,5 +13,6 @@ side_2:
     len: 1
   - name: recv_pkt
   - name: local_check
-    offset: 0
-    expected: 'ff'
+    seg: 
+      - offset: 0
+        expected: 'ff'
