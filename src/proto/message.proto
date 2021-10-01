@@ -226,3 +226,12 @@ message PollCompleteRequest {
 message PollCompleteResponse {
     bool same = 1;
 }
+
+message CheckQpStatusRequest {
+    uint32 status = 1;
+    uint32 qp_id = 2;
+}
+
+message CheckQpStatusResponse {
+    bool same = 1;
+}
