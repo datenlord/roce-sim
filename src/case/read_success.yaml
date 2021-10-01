@@ -12,6 +12,11 @@ side_2:
   - name: remote_read
     len: 1
   - name: recv_pkt
+    poll_cqe: false
+  - name: poll_complete
+    len: 1
+    opcode: 2
+    status: 0
   - name: local_check
     seg: 
       - offset: 0

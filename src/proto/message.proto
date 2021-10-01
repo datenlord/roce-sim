@@ -147,7 +147,7 @@ message LocalCheckMemResponse {
 
 message RecvPktRequest {
     uint32 wait_for_retry = 1;
-    bool has_cqe = 2;
+    bool poll_cqe = 2;
     uint32 qp_id = 3;
 }
 
@@ -203,7 +203,26 @@ message RemoteAtomicCasResponse {
 message PollCompleteRequest {
     uint32 cq_id = 1;
     uint32 qp_id = 2;
+    oneof sqpn_option {
+        uint32 sqpn = 3;
+    }
+    oneof qpn_option {
+        uint32 qpn = 4;
+    }
+    oneof len_option {
+        uint32 len = 5;
+    }
+    oneof opcode_option {
+        uint32 opcode = 6;
+    }
+    oneof status_option {
+        uint32 status = 7;
+    }
+    oneof imm_or_rkey_option {
+        uint32 imm_data_or_inv_rkey = 8;
+    }
 }
 
 message PollCompleteResponse {
+    bool same = 1;
 }

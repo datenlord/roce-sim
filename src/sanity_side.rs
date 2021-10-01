@@ -375,7 +375,7 @@ impl Side for SideImpl {
         req: proto::message::PollCompleteRequest,
         sink: grpcio::UnarySink<proto::message::PollCompleteResponse>,
     ) {
-        rdma::ibv::poll_completion(
+        let (_, cqe) = rdma::ibv::poll_completion(
             CQ_MAP
                 .read()
                 .unwrap()
@@ -384,7 +384,35 @@ impl Side for SideImpl {
                 .0,
         );
 
-        let resp = PollCompleteResponse::default();
+        let mut same = true;
+        if req.has_sqpn() {
+            same = same && cqe.src_qp == req.get_sqpn();
+        }
+
+        if req.has_qpn() {
+            same = same && cqe.qp_num == req.get_qpn();
+        }
+
+        if req.has_len() {
+            same = same && cqe.byte_len == req.get_len();
+        }
+
+        if req.has_opcode() {
+            same = same && cqe.opcode == req.get_opcode();
+        }
+
+        if req.has_status() {
+            same = same && cqe.status == req.get_status();
+        }
+
+        if req.has_imm_data_or_inv_rkey() {
+            same = same
+                && unsafe { cqe.imm_data_invalidated_rkey_union.invalidated_rkey }
+                    == req.get_imm_data_or_inv_rkey();
+        }
+
+        let mut resp = PollCompleteResponse::default();
+        resp.set_same(same);
         let f = sink.success(resp).map_err(|_| {}).map(|_| ());
         ctx.spawn(f)
     }

@@ -190,9 +190,10 @@ def recv_pkt(
     other_stub: SideStub,
 ):
     retry = c_arg.get("wait_for_retry", 0)
+    poll_cqe = c_arg.get("poll_cqe", True)
     self_stub.RecvPkt(
         message_pb2.RecvPktRequest(
-            wait_for_retry=retry, has_cqe=True, qp_id=self_info.qp_id
+            wait_for_retry=retry, poll_cqe = poll_cqe, qp_id=self_info.qp_id
         )
     )
     return True
@@ -427,13 +428,36 @@ def poll_complete(
     other_info: SideInfo,
     other_stub: SideStub,
 ):
-    self_stub.PollComplete(
-        message_pb2.PollCompleteRequest(
-            qp_id=self_info.qp_id,
-            cq_id=self_info.cq_id,
-        )
+    request = message_pb2.PollCompleteRequest(
+        qp_id=self_info.qp_id,
+        cq_id=self_info.cq_id,
     )
-    return True
+    sqpn = c_arg.get("sqpn")
+    if sqpn:
+        request.sqpn = sqpn
+
+    qpn = c_arg.get("qpn")
+    if qpn:
+        request.qpn = qpn
+    
+    len = c_arg.get("len")
+    if len:
+        request.len = len
+
+    opcode = c_arg.get("opcode")
+    if opcode:
+        request.opcode = opcode
+
+    status = c_arg.get("status")
+    if status:
+        request.status = status
+
+    imm_data_or_inv_rkey = c_arg.get("imm_data_or_inv_rkey")
+    if imm_data_or_inv_rkey:
+        request.imm_data_or_inv_rkey = imm_data_or_inv_rkey
+
+    response = self_stub.PollComplete(request)
+    return response.same
 
 
 COMMAND_MAP: Final = {
