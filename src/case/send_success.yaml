@@ -7,6 +7,9 @@ side_1:
   - name: barrier
   - name: barrier
   - name: poll_complete
+    len: 1
+    opcode: 0
+    status: 0
   - name: local_check
     seg: 
       - offset: 0

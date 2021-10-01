@@ -198,9 +198,9 @@ class SanitySide(SideServicer):
             else None
         )
         GLOBAL_ROCE.recv_pkts(1, retry_handler=retry_handler)
-        if request.has_cqe:
+        if request.poll_cqe:
             qp = qp_list[request.qp_id]
-            cqe = qp.poll_cq()
+            qp.poll_cq()
         return RecvPktResponse()
 
     def LocalCheckMem(self, request, context):
@@ -210,7 +210,7 @@ class SanitySide(SideServicer):
 
         result = True
         for i in range(len(offset)):
-            read = mr.byte_data[request.offset : (offset[i] + len(expected[i]))]
+            read = mr.byte_data[offset[i] : (offset[i] + len(expected[i]))]
             logging.debug(f"local check real data {read} for offset {offset[i]}")
             result = result and (bytearray(expected[i]) == read)
         return LocalCheckMemResponse(same=result)
@@ -235,8 +235,29 @@ class SanitySide(SideServicer):
 
     def PollComplete(self, request, context):
         qp = qp_list[request.qp_id]
-        qp.poll_cq()
-        return PollCompleteResponse()
+        cqe = qp.poll_cq()
+
+        same = True
+
+        if request.HasField("sqpn"):
+            same = same and cqe.sqpn() == request.sqpn
+
+        if request.HasField("qpn"):
+            same = same and cqe.local_qpn() == request.qpn
+
+        if request.HasField("len"):
+            same = same and cqe.len() == request.len
+
+        if request.HasField("opcode"):
+            same = same and cqe.op() == request.opcode
+
+        if request.HasField("status"):
+            same = same and cqe.status() == request.status
+
+        if request.HasField("imm_data_or_inv_rkey"):
+            same = same and cqe.imm_data_or_inv_rkey() == request.imm_data_or_inv_rkey
+
+        return PollCompleteResponse(same=same)
 
 
 def default_retry_handler(barrier_cnt):
