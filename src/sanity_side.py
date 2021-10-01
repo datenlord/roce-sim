@@ -1,4 +1,5 @@
 from proto.message_pb2 import (
+    CheckQpStatusResponse,
     ConnectQpResponse,
     CreateCqResponse,
     CreateMrResponse,
@@ -258,6 +259,11 @@ class SanitySide(SideServicer):
             same = same and cqe.imm_data_or_inv_rkey() == request.imm_data_or_inv_rkey
 
         return PollCompleteResponse(same=same)
+
+    def CheckQpStatus(self, request, context):
+        expect_status = request.status
+        qp = qp_list[request.qp_id]
+        return CheckQpStatusResponse(same=(qp.status() == expect_status))
 
 
 def default_retry_handler(barrier_cnt):

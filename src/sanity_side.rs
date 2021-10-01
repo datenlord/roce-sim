@@ -7,13 +7,7 @@ use futures::executor::block_on;
 use futures::{FutureExt, TryFutureExt};
 use grpcio::{ChannelBuilder, Environment, ResourceQuota, ServerBuilder};
 use lazy_static::lazy_static;
-use proto::message::{
-    ConnectQpResponse, CreateCqResponse, CreateMrResponse, CreatePdResponse, CreateQpResponse,
-    LocalCheckMemResponse, LocalRecvResponse, LocalWriteResponse, OpenDeviceResponce,
-    PollCompleteResponse, QueryGidResponse, QueryPortResponse, RecvPktResponse,
-    RemoteAtomicCasResponse, RemoteReadResponse, RemoteSendResponse, RemoteWriteResponse,
-    UnblockRetryResponse, VersionResponse,
-};
+use proto::message::{CheckQpStatusResponse, ConnectQpResponse, CreateCqResponse, CreateMrResponse, CreatePdResponse, CreateQpResponse, LocalCheckMemResponse, LocalRecvResponse, LocalWriteResponse, OpenDeviceResponce, PollCompleteResponse, QueryGidResponse, QueryPortResponse, RecvPktResponse, RemoteAtomicCasResponse, RemoteReadResponse, RemoteSendResponse, RemoteWriteResponse, UnblockRetryResponse, VersionResponse};
 use proto::side_grpc::{self, Side};
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -525,6 +519,27 @@ impl Side for SideImpl {
         vec.clone_from_slice(req.get_content());
 
         let resp = LocalWriteResponse::default();
+        let f = sink.success(resp).map_err(|_| {}).map(|_| ());
+        ctx.spawn(f);
+    }
+
+    fn check_qp_status(
+        &mut self,
+        ctx: grpcio::RpcContext,
+        req: proto::message::CheckQpStatusRequest,
+        sink: grpcio::UnarySink<proto::message::CheckQpStatusResponse>,
+    ) {
+        let (_, qp_attr) = rdma::ibv::query_qp(
+            *QP_MAP
+                .read()
+                .unwrap()
+                .get(req.get_qp_id().cast::<usize>())
+                .unwrap(),
+        );
+        let is_eq = qp_attr.qp_state == req.get_status();
+
+        let mut resp = CheckQpStatusResponse::default();
+        resp.set_same(is_eq);
         let f = sink.success(resp).map_err(|_| {}).map(|_| ());
         ctx.spawn(f);
     }

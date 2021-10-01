@@ -193,7 +193,7 @@ def recv_pkt(
     poll_cqe = c_arg.get("poll_cqe", True)
     self_stub.RecvPkt(
         message_pb2.RecvPktRequest(
-            wait_for_retry=retry, poll_cqe = poll_cqe, qp_id=self_info.qp_id
+            wait_for_retry=retry, poll_cqe=poll_cqe, qp_id=self_info.qp_id
         )
     )
     return True
@@ -439,7 +439,7 @@ def poll_complete(
     qpn = c_arg.get("qpn")
     if qpn:
         request.qpn = qpn
-    
+
     len = c_arg.get("len")
     if len:
         request.len = len
@@ -460,6 +460,26 @@ def poll_complete(
     return response.same
 
 
+def check_qp_status(
+    c_arg,
+    self_side: Side,
+    self_info: SideInfo,
+    self_stub: SideStub,
+    other_side: Side,
+    other_info: SideInfo,
+    other_stub: SideStub,
+):
+    status = c_arg.get("status")
+    if not status:
+        logging.error("status should be set")
+        return False
+
+    response = self_stub.CheckQpStatus(
+        message_pb2.CheckQpStatusRequest(status=status, qp_id=self_info.qp_id)
+    )
+    return response.same
+
+
 COMMAND_MAP: Final = {
     "connect_qp": connect_qp,
     "sleep": sleep,
@@ -474,6 +494,7 @@ COMMAND_MAP: Final = {
     "unblock_other": unblock_other,
     "barrier": barrier,
     "poll_complete": poll_complete,
+    "check_qp_status": check_qp_status,
 }
 
 

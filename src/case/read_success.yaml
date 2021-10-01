@@ -21,3 +21,5 @@ side_2:
     seg: 
       - offset: 0
         expected: 'ff'
+  - name: check_qp_status
+    status: 3
