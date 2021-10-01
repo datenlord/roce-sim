@@ -7,7 +7,13 @@ use futures::executor::block_on;
 use futures::{FutureExt, TryFutureExt};
 use grpcio::{ChannelBuilder, Environment, ResourceQuota, ServerBuilder};
 use lazy_static::lazy_static;
-use proto::message::{CheckQpStatusResponse, ConnectQpResponse, CreateCqResponse, CreateMrResponse, CreatePdResponse, CreateQpResponse, LocalCheckMemResponse, LocalRecvResponse, LocalWriteResponse, OpenDeviceResponce, PollCompleteResponse, QueryGidResponse, QueryPortResponse, RecvPktResponse, RemoteAtomicCasResponse, RemoteReadResponse, RemoteSendResponse, RemoteWriteResponse, UnblockRetryResponse, VersionResponse};
+use proto::message::{
+    CheckQpStatusResponse, ConnectQpResponse, CreateCqResponse, CreateMrResponse, CreatePdResponse,
+    CreateQpResponse, LocalCheckMemResponse, LocalRecvResponse, LocalWriteResponse,
+    ModifyQpResponse, OpenDeviceResponce, PollCompleteResponse, QueryGidResponse,
+    QueryPortResponse, RecvPktResponse, RemoteAtomicCasResponse, RemoteReadResponse,
+    RemoteSendResponse, RemoteWriteResponse, UnblockRetryResponse, VersionResponse,
+};
 use proto::side_grpc::{self, Side};
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -580,6 +586,25 @@ impl Side for SideImpl {
         let mut resp = LocalCheckMemResponse::new();
         resp.set_same(is_eq);
 
+        let f = sink.success(resp).map_err(|_| {}).map(|_| ());
+        ctx.spawn(f);
+    }
+
+    fn modify_qp(
+        &mut self,
+        ctx: grpcio::RpcContext,
+        req: proto::message::ModifyQpRequest,
+        sink: grpcio::UnarySink<proto::message::ModifyQpResponse>,
+    ) {
+        let qp = *QP_MAP
+            .read()
+            .unwrap()
+            .get(req.get_qp_id().cast::<usize>())
+            .unwrap();
+
+        rdma::ibv::modify_qp_sq_psn(qp, req.get_sq_psn());
+
+        let resp = ModifyQpResponse::new();
         let f = sink.success(resp).map_err(|_| {}).map(|_| ());
         ctx.spawn(f);
     }

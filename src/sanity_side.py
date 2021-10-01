@@ -8,6 +8,7 @@ from proto.message_pb2 import (
     LocalCheckMemResponse,
     LocalRecvResponse,
     LocalWriteResponse,
+    ModifyQpResponse,
     OpenDeviceResponce,
     PollCompleteResponse,
     QueryPortResponse,
@@ -151,7 +152,7 @@ class SanitySide(SideServicer):
         )
         qp = qp_list[request.qp_id]
         qp.post_send(sr)
-        qp.process_one_sr()
+        qp.process_one_sr(request.real_send)
         return RemoteReadRequest()
 
     def RemoteWrite(self, request, context):
@@ -203,6 +204,11 @@ class SanitySide(SideServicer):
             qp = qp_list[request.qp_id]
             qp.poll_cq()
         return RecvPktResponse(opcode=opcode)
+
+    def ModifyQp(self, request, context):
+        qp = qp_list[request.qp_id]
+        qp.modify_qp(sq_psn=request.sq_psn)
+        return ModifyQpResponse()
 
     def LocalCheckMem(self, request, context):
         mr = mr_list[request.mr_id]

@@ -190,7 +190,7 @@ class QP:
                 f"QP={self.qpn()} encountered packet head verification failure, \
                     drop packet={pkt.show(dump=True)}"
             )
-            return rc_op # Just drop packet
+            return rc_op  # Just drop packet
 
         if RC.request(rc_op):
             try:
@@ -219,8 +219,8 @@ class QP:
             self.reset_oldest_sent_ts()  # Reset oldest_sent_ts when ACK or NAK received
         else:
             assert False, f"BUG: QP={self.qpn()} received unsupported opcode={rc_op}"
-        
-        return rc_op 
+
+        return rc_op
 
     def poll_cq(self):
         if not self.cq.empty():  # TODO: support seperate CQ for SQ and RQ
@@ -236,9 +236,9 @@ class QP:
         assert self.qps in [QPS.RTS, QPS.RTR], "QP state is not RTS or RTR"
         self.rq.push(recv_wr)
 
-    def process_one_sr(self):
+    def process_one_sr(self, real_send=True):
         assert self.qps == QPS.RTS, "QP state is not RTS"
-        return self.sq.process_req()
+        return self.sq.process_req(real_send)
 
     def flush(self):  # Flush all WR in SQ/RQ
         # All pending processing send WR will be completed with flush in error

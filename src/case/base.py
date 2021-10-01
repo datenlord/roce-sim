@@ -138,8 +138,8 @@ def connect_qp(
     mtu = c_arg.get("mtu", 1024)
     sq_start_psn = c_arg.get("sq_start_psn", 0)
     rq_start_psn = c_arg.get("rq_start_psn", 0)
-    max_rd_atomic = c_arg.get("max_rd_atomic", 1)
-    max_dest_rd_atomic = c_arg.get("max_dest_rd_atomic", 1)
+    max_rd_atomic = c_arg.get("max_rd_atomic", 2)
+    max_dest_rd_atomic = c_arg.get("max_dest_rd_atomic", 2)
     min_rnr_timer = c_arg.get("min_rnr_timer", 0x12)
 
     self_stub.ConnectQp(
@@ -200,7 +200,7 @@ def recv_pkt(
     expect_opcode = c_arg.get("op_code")
     if expect_opcode:
         return expect_opcode == response.opcode
-    
+
     return True
 
 
@@ -270,6 +270,7 @@ def remote_read(
     local_offset = c_arg.get("local_offset", 0)
     remote_offset = c_arg.get("remote_offset", 0)
     len = c_arg.get("len", 0)
+    real_send = c_arg.get("real_send", True)
 
     self_stub.RemoteRead(
         message_pb2.RemoteReadRequest(
@@ -280,6 +281,7 @@ def remote_read(
             remote_key=other_info.rkey,
             qp_id=self_info.qp_id,
             cq_id=self_info.cq_id,
+            real_send=real_send,
         )
     )
     return True
@@ -485,6 +487,24 @@ def check_qp_status(
     return response.same
 
 
+def modify_qp(
+    c_arg,
+    self_side: Side,
+    self_info: SideInfo,
+    self_stub: SideStub,
+    other_side: Side,
+    other_info: SideInfo,
+    other_stub: SideStub,
+):
+    sq_psn = c_arg.get("sq_psn")
+    if sq_psn:
+        response = self_stub.ModifyQp(
+            message_pb2.ModifyQpRequest(qp_id=self_info.qp_id, sq_psn=sq_psn)
+        )
+
+    return True
+
+
 COMMAND_MAP: Final = {
     "connect_qp": connect_qp,
     "sleep": sleep,
@@ -500,6 +520,7 @@ COMMAND_MAP: Final = {
     "barrier": barrier,
     "poll_complete": poll_complete,
     "check_qp_status": check_qp_status,
+    "modify_qp": modify_qp,
 }
 
 

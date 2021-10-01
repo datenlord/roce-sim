@@ -1180,21 +1180,21 @@ class TXLogic:
     def retry_logic(self):
         return self.sq().retry_logic
 
-    def send_req_pkt(self, cssn, send_req):
-        self.sq().send_req_pkt(cssn, send_req)
+    def send_req_pkt(self, cssn, send_req, real_send=True):
+        self.sq().send_req_pkt(cssn, send_req, real_send)
 
-    def process_req(self):
+    def process_req(self, real_send=True):
         if not self.sq().busy():
             wr, cssn = self.sq().pop()
             req_pkt_num = None
             if WR_OPCODE.send(wr.wr_op()):
-                req_pkt_num = self.process_send_req(wr, cssn)
+                req_pkt_num = self.process_send_req(wr, cssn, real_send)
             elif WR_OPCODE.write(wr.wr_op()):
-                req_pkt_num = self.process_write_req(wr, cssn)
+                req_pkt_num = self.process_write_req(wr, cssn, real_send)
             elif WR_OPCODE.RDMA_READ == wr.wr_op():
-                req_pkt_num = self.process_read_req(wr, cssn)
+                req_pkt_num = self.process_read_req(wr, cssn, real_send)
             elif WR_OPCODE.atomic(wr.wr_op()):
-                req_pkt_num = self.process_atomic_req(wr, cssn)
+                req_pkt_num = self.process_atomic_req(wr, cssn, real_send)
             else:
                 assert (
                     False
@@ -1208,7 +1208,7 @@ class TXLogic:
             )
             return False
 
-    def process_send_req(self, sr, cssn):
+    def process_send_req(self, sr, cssn, real_send=True):
         assert WR_OPCODE.send(sr.wr_op()), "should be send operation"
 
         addr = sr.laddr()
@@ -1233,7 +1233,7 @@ class TXLogic:
                 solicited=False,
             )
             send_req = send_bth / Raw(load=send_data[0 : self.mtu()])
-            self.send_req_pkt(cssn, send_req)
+            self.send_req_pkt(cssn, send_req, real_send)
 
             send_req_mid_pkt_num = send_req_pkt_num - 2
             for i in range(send_req_mid_pkt_num):
@@ -1247,7 +1247,7 @@ class TXLogic:
                 send_req = send_bth / Raw(
                     load=send_data[((i + 1) * self.mtu()) : ((i + 2) * self.mtu())]
                 )
-                self.send_req_pkt(cssn, send_req)
+                self.send_req_pkt(cssn, send_req, real_send)
 
         rc_op = None
         if send_req_pkt_num == 1:
@@ -1285,10 +1285,10 @@ class TXLogic:
                 load=send_data[((send_req_pkt_num - 1) * self.mtu()) : send_size]
             )
             send_req = send_req / raw_pkt
-        self.send_req_pkt(cssn, send_req)
+        self.send_req_pkt(cssn, send_req, real_send)
         return send_req_pkt_num
 
-    def process_write_req(self, sr, cssn):
+    def process_write_req(self, sr, cssn, real_send=True):
         assert WR_OPCODE.write(sr.wr_op()), "should be write operation"
 
         addr = sr.laddr()
@@ -1314,7 +1314,7 @@ class TXLogic:
                 solicited=False,
             )
             write_req = write_bth / write_reth / Raw(load=write_data[0 : self.mtu()])
-            self.send_req_pkt(cssn, write_req)
+            self.send_req_pkt(cssn, write_req, real_send)
 
             write_req_mid_pkt_num = write_req_pkt_num - 2
             for i in range(write_req_mid_pkt_num):
@@ -1328,7 +1328,7 @@ class TXLogic:
                 write_req = write_bth / Raw(
                     load=write_data[((i + 1) * self.mtu()) : ((i + 2) * self.mtu())]
                 )
-                self.send_req_pkt(cssn, write_req)
+                self.send_req_pkt(cssn, write_req, real_send)
 
         rc_op = None
         solicited = False
@@ -1375,10 +1375,10 @@ class TXLogic:
                 load=write_data[((write_req_pkt_num - 1) * self.mtu()) : write_size]
             )
             write_req = write_req / raw_pkt
-        self.send_req_pkt(cssn, write_req)
+        self.send_req_pkt(cssn, write_req, real_send)
         return write_req_pkt_num
 
-    def process_read_req(self, sr, cssn):
+    def process_read_req(self, sr, cssn, real_send=True):
         assert sr.wr_op() == WR_OPCODE.RDMA_READ, "should be read operation"
 
         read_size = sr.len()
@@ -1403,10 +1403,10 @@ class TXLogic:
             read_resp_pkt_num=read_resp_pkt_num,
         )
         self.resp_logic().add_resp_ctx(cssn, read_resp_ctx)
-        self.send_req_pkt(cssn, read_req)
+        self.send_req_pkt(cssn, read_req, real_send)
         return read_resp_pkt_num
 
-    def process_atomic_req(self, sr, cssn):
+    def process_atomic_req(self, sr, cssn, real_send=True):
         assert WR_OPCODE.atomic(sr.wr_op()), "should be atomic operation"
 
         rc_op = (
@@ -1429,7 +1429,7 @@ class TXLogic:
             swap=sr.swap(),
         )
         atomic_req = atomic_bth / atomic_eth
-        self.sq().send_req_pkt(cssn, atomic_req)
+        self.sq().send_req_pkt(cssn, atomic_req, real_send)
         atomic_req_pkt_num = 1  # Atomic request only has 1 packet
         return atomic_req_pkt_num
 
@@ -1618,16 +1618,17 @@ class SQ:
         )
         send(l3_pkt)
 
-    def send_req_pkt(self, wr_ssn, req_pkt):
+    def send_req_pkt(self, wr_ssn, req_pkt, real_send=True):
         req_pkt_psn = req_pkt[BTH].psn
         logging.debug(
             f"SQ={self.sqpn()} send request packet with PSN={req_pkt_psn} for WR SSN={wr_ssn}"
         )
         self.retry_logic.add_req_pkt(wr_ssn, req_pkt)
-        self.do_send_pkt(req_pkt)
+        if real_send:
+            self.do_send_pkt(req_pkt)
 
-    def process_req(self):
-        self.tx_logic.process_req()
+    def process_req(self, real_send=True):
+        self.tx_logic.process_req(real_send)
 
     def handle_response(self, resp_pkt):
         self.resp_logic.handle_response(resp_pkt)

@@ -114,6 +114,7 @@ message RemoteReadRequest {
     uint32 remote_key = 5;
     uint32 qp_id = 6;
     uint32 cq_id = 7;
+    bool real_send = 8;
 }
 
 message RemoteReadResponse {
@@ -236,4 +237,12 @@ message CheckQpStatusRequest {
 
 message CheckQpStatusResponse {
     bool same = 1;
+}
+
+message ModifyQpRequest {
+    uint32 qp_id = 1;
+    uint32 sq_psn = 2;
+}
+
+message ModifyQpResponse {
 }
