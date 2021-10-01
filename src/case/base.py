@@ -191,11 +191,16 @@ def recv_pkt(
 ):
     retry = c_arg.get("wait_for_retry", 0)
     poll_cqe = c_arg.get("poll_cqe", True)
-    self_stub.RecvPkt(
+    response = self_stub.RecvPkt(
         message_pb2.RecvPktRequest(
             wait_for_retry=retry, poll_cqe=poll_cqe, qp_id=self_info.qp_id
         )
     )
+
+    expect_opcode = c_arg.get("op_code")
+    if expect_opcode:
+        return expect_opcode == response.opcode
+    
     return True
 
 
