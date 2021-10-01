@@ -18,3 +18,4 @@ test_cases:
   - "send_success"
   - "send_rnr_retry"
   - "atomic_cas_success"
+  - "read_psn_error_retry"

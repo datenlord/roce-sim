@@ -1,0 +1,26 @@
+side_1: 
+  - name: prepare
+  - name: connect_qp
+  - name: local_write
+    offset: 0
+    content: 'ffee'
+  - name: barrier
+side_2:
+  - name: prepare
+  - name: connect_qp
+  - name: barrier
+  - name: remote_read
+    real_send: false
+    len: 1
+  - name: remote_read
+    remote_offset: 1
+    local_offset: 1
+    len: 1
+  - name: recv_pkt
+  - name: recv_pkt
+  - name: local_check
+    seg: 
+      - offset: 0
+        expected: 'ffee'
+  - name: check_qp_status
+    status: 3
