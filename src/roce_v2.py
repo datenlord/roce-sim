@@ -190,7 +190,7 @@ class QP:
                 f"QP={self.qpn()} encountered packet head verification failure, \
                     drop packet={pkt.show(dump=True)}"
             )
-            return  # Just drop packet
+            return rc_op # Just drop packet
 
         if RC.request(rc_op):
             try:
@@ -219,6 +219,8 @@ class QP:
             self.reset_oldest_sent_ts()  # Reset oldest_sent_ts when ACK or NAK received
         else:
             assert False, f"BUG: QP={self.qpn()} received unsupported opcode={rc_op}"
+        
+        return rc_op 
 
     def poll_cq(self):
         if not self.cq.empty():  # TODO: support seperate CQ for SQ and RQ
@@ -327,6 +329,7 @@ class RoCEv2:
                         local_err.process_local_err()
         else:
             logging.debug(f"expect receiving {npkt} packets")
+            opcodes = []
             for idx in range(npkt):
                 roce_bytes, peer_addr = self.roce_sock.recvfrom(UDP_BUF_SIZE)
                 # TODO: handle non-RoCE packet
@@ -341,5 +344,6 @@ class RoCEv2:
                 # TODO: handle head verification, wrong QPN
                 assert dqpn in self.qp_dict, f"wrong QPN={dqpn} in received packet"
                 local_qp = self.qp_dict[dqpn]
-                local_qp.recv_pkt(roce_pkt, retry_handler)
+                opcodes.append(local_qp.recv_pkt(roce_pkt, retry_handler))
             logging.debug(f"received {npkt} RoCE packets")
+            return opcodes

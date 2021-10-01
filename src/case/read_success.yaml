@@ -13,6 +13,7 @@ side_2:
     len: 1
   - name: recv_pkt
     poll_cqe: false
+    opcode: 2
   - name: poll_complete
     len: 1
     opcode: 2

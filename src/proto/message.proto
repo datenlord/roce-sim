@@ -151,7 +151,9 @@ message RecvPktRequest {
     uint32 qp_id = 3;
 }
 
-message RecvPktResponse {}
+message RecvPktResponse {
+    uint32 opcode = 1;
+}
 
 message LocalRecvRequest {
     uint64 addr = 1;

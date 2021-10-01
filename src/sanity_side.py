@@ -198,11 +198,11 @@ class SanitySide(SideServicer):
             if request.wait_for_retry
             else None
         )
-        GLOBAL_ROCE.recv_pkts(1, retry_handler=retry_handler)
+        opcode = GLOBAL_ROCE.recv_pkts(1, retry_handler=retry_handler)[0]
         if request.poll_cqe:
             qp = qp_list[request.qp_id]
             qp.poll_cq()
-        return RecvPktResponse()
+        return RecvPktResponse(opcode=opcode)
 
     def LocalCheckMem(self, request, context):
         mr = mr_list[request.mr_id]
