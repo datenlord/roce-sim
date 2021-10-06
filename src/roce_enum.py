@@ -159,6 +159,9 @@ class WC_FLAGS(IntFlag):
     TM_MATCH = 32
     TM_DATA_VALID = 64
 
+class QueueType(IntEnum):
+    SQ = 0
+    RQ = 1
 
 class WC_OPCODE(IntEnum):
     SEND = 0
@@ -179,11 +182,14 @@ class WC_OPCODE(IntEnum):
     DRIVER1 = 135
 
     @staticmethod
-    def from_wr_op(wr_op):
-        if wr_op in [WR_OPCODE.RDMA_WRITE, WR_OPCODE.RDMA_WRITE_WITH_IMM]:
+    def from_wr_op(queue_type, wr_op):
+        if wr_op in [WR_OPCODE.RDMA_WRITE]:
             return WC_OPCODE.RDMA_WRITE
-        # elif wr_op == WR_OPCODE.RDMA_WRITE_WITH_IMM:
-        #     return WC_OPCODE.RECV_RDMA_WITH_IMM
+        elif wr_op == WR_OPCODE.RDMA_WRITE_WITH_IMM:
+            if queue_type == QueueType.SQ:
+                return WC_OPCODE.RDMA_WRITE
+            else:
+                return WC_OPCODE.RECV_RDMA_WITH_IMM
         elif wr_op in [
             WR_OPCODE.SEND,
             WR_OPCODE.SEND_WITH_IMM,

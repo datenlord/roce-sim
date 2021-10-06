@@ -386,7 +386,7 @@ class ReadRespCtx(RespCtx):
             read_cqe = CQE(
                 wr_id=self.wr().id(),
                 status=WC_STATUS.SUCCESS,
-                opcode=WC_OPCODE.from_wr_op(self.wr().wr_op()),
+                opcode=WC_OPCODE.from_wr_op(QueueType.SQ, self.wr().wr_op()),
                 length=read_dlen,
                 qpn=self.sqpn(),
                 src_qp=self.dqpn(),
@@ -513,7 +513,7 @@ class RetryLogic:
             flush_pending_cqe = CQE(
                 wr_id=pending_sr.id(),
                 status=WC_STATUS.WR_FLUSH_ERR,
-                opcode=WC_OPCODE.from_wr_op(pending_sr.wr_op()),
+                opcode=WC_OPCODE.from_wr_op(QueueType.SQ, pending_sr.wr_op()),
                 length=pending_sr.len(),
                 qpn=self.sqpn(),
                 src_qp=self.dqpn(),
@@ -1018,7 +1018,7 @@ class RespLogic:
                 cqe = CQE(
                     wr_id=wr_ctx.wr().id(),
                     status=WC_STATUS.SUCCESS,
-                    opcode=WC_OPCODE.from_wr_op(wr_op),
+                    opcode=WC_OPCODE.from_wr_op(QueueType.SQ, wr_op),
                     length=wr_ctx.data_size(),
                     qpn=self.sqpn(),
                     src_qp=self.dqpn(),
@@ -1135,7 +1135,7 @@ class RespLogic:
         atomic_cqe = CQE(
             wr_id=atomic_wr_ctx.wr().id(),
             status=WC_STATUS.SUCCESS,
-            opcode=WC_OPCODE.from_wr_op(atomic_wr_ctx.wr().wr_op()),
+            opcode=WC_OPCODE.from_wr_op(QueueType.SQ, atomic_wr_ctx.wr().wr_op()),
             length=ATOMIC_BYTE_SIZE,
             qpn=self.sqpn(),
             src_qp=self.dqpn(),
@@ -1577,7 +1577,7 @@ class SQ:
             flush_cqe = CQE(
                 wr_id=flush_sr.wr().id(),
                 status=WC_STATUS.WR_FLUSH_ERR,
-                opcode=WC_OPCODE.from_wr_op(flush_sr.wr().wr_op()),
+                opcode=WC_OPCODE.from_wr_op(QueueType.SQ, flush_sr.wr().wr_op()),
                 length=flush_sr.wr().len(),
                 qpn=self.sqpn(),
                 src_qp=self.dqpn(),
@@ -1597,7 +1597,7 @@ class SQ:
         nak_cqe = CQE(
             wr_id=nak_sr_ctx.wr().id(),
             status=err_wc_status,
-            opcode=WC_OPCODE.from_wr_op(nak_sr_ctx.wr().wr_op()),
+            opcode=WC_OPCODE.from_wr_op(QueueType.SQ, nak_sr_ctx.wr().wr_op()),
             length=nak_sr_ctx.wr().len(),
             qpn=self.sqpn(),
             src_qp=self.dqpn(),

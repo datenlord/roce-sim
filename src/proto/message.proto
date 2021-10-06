@@ -246,3 +246,26 @@ message ModifyQpRequest {
 
 message ModifyQpResponse {
 }
+
+message RemoteWriteImmRequest {
+    uint64 addr = 1;
+    uint32 len = 2;
+    uint32 lkey = 3;
+    uint64 remote_addr = 4;
+    uint32 remote_key = 5;
+    uint32 imm_data = 6;
+    uint32 qp_id = 7;
+    uint32 cq_id = 8;
+    uint32 send_flag = 9;
+}
+
+message RemoteWriteImmResponse {
+}
+
+message NotifyCqRequest {
+    uint32 cq_id = 1;
+    uint32 solicited_only = 2;
+}
+
+message NotifyCqResponse {
+}

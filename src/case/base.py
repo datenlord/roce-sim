@@ -314,6 +314,48 @@ def remote_write(
     return True
 
 
+def remote_write_imm(
+    c_arg,
+    self_side: Side,
+    self_info: SideInfo,
+    self_stub: SideStub,
+    other_side: Side,
+    other_info: SideInfo,
+    other_stub: SideStub,
+):
+    local_offset = c_arg.get("local_offset", 0)
+    remote_offset = c_arg.get("remote_offset", 0)
+    len = c_arg.get("len", 0)
+    imm = c_arg.get("imm", 0x1234)
+    send_flag = c_arg.get("send_flag", 2)
+
+    if isinstance(send_flag, str):
+        if send_flag == "SIGNALED":
+            send_flag = 2
+        elif send_flag == "SOLICITED":
+            send_flag = 4
+        else:
+            logging.error(
+                f"{send_flag} is not supported, only SIGNALED and SOLICITED is supported"
+            )
+            return False
+
+    self_stub.RemoteWriteImm(
+        message_pb2.RemoteWriteImmRequest(
+            addr=(self_info.addr + local_offset),
+            len=len,
+            lkey=self_info.lkey,
+            remote_addr=(other_info.addr + remote_offset),
+            remote_key=other_info.rkey,
+            imm_data=imm,
+            qp_id=self_info.qp_id,
+            cq_id=self_info.cq_id,
+            send_flag=send_flag,
+        )
+    )
+    return True
+
+
 def remote_send(
     c_arg,
     self_side: Side,
@@ -505,6 +547,24 @@ def modify_qp(
     return True
 
 
+def notify_cq(
+    c_arg,
+    self_side: Side,
+    self_info: SideInfo,
+    self_stub: SideStub,
+    other_side: Side,
+    other_info: SideInfo,
+    other_stub: SideStub,
+):
+    solicited_only = c_arg.get("solicited_only", False)
+    response = self_stub.NotifyCq(
+        message_pb2.NotifyCqRequest(
+            cq_id=self_info.cq_id, solicited_only=1 if solicited_only else 0
+        )
+    )
+    return True
+
+
 COMMAND_MAP: Final = {
     "connect_qp": connect_qp,
     "sleep": sleep,
@@ -513,6 +573,7 @@ COMMAND_MAP: Final = {
     "local_write": local_write,
     "remote_read": remote_read,
     "remote_write": remote_write,
+    "remote_write_imm": remote_write_imm,
     "remote_send": remote_send,
     "remote_atomic_cas": remote_atomic_cas,
     "local_recv": local_recv,
@@ -521,6 +582,7 @@ COMMAND_MAP: Final = {
     "poll_complete": poll_complete,
     "check_qp_status": check_qp_status,
     "modify_qp": modify_qp,
+    "notify_cq": notify_cq,
 }
 
 
