@@ -150,6 +150,7 @@ message RecvPktRequest {
     uint32 wait_for_retry = 1;
     bool poll_cqe = 2;
     uint32 qp_id = 3;
+    uint32 cnt = 4;
 }
 
 message RecvPktResponse {
