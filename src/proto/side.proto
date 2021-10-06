@@ -23,4 +23,6 @@ service Side {
     rpc PollComplete(PollCompleteRequest) returns (PollCompleteResponse) {}
     rpc CheckQpStatus(CheckQpStatusRequest) returns (CheckQpStatusResponse) {}
     rpc ModifyQp(ModifyQpRequest) returns (ModifyQpResponse) {}
+    rpc RemoteWriteImm(RemoteWriteImmRequest) returns (RemoteWriteImmResponse) {}
+    rpc NotifyCq(NotifyCqRequest) returns (NotifyCqResponse) {}
 }

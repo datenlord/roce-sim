@@ -9,14 +9,18 @@ from proto.message_pb2 import (
     LocalRecvResponse,
     LocalWriteResponse,
     ModifyQpResponse,
+    NotifyCqResponse,
     OpenDeviceResponce,
     PollCompleteResponse,
     QueryPortResponse,
     RecvPktResponse,
     RemoteAtomicCasResponse,
     RemoteReadRequest,
+    RemoteReadResponse,
     RemoteSendResponse,
+    RemoteWriteImmResponse,
     RemoteWriteRequest,
+    RemoteWriteResponse,
     UnblockRetryResponse,
     VersionResponse,
     QueryGidResponse,
@@ -153,7 +157,7 @@ class SanitySide(SideServicer):
         qp = qp_list[request.qp_id]
         qp.post_send(sr)
         qp.process_one_sr(request.real_send)
-        return RemoteReadRequest()
+        return RemoteReadResponse()
 
     def RemoteWrite(self, request, context):
         sg = SG(pos_in_mr=request.addr, length=request.len, lkey=request.lkey)
@@ -167,7 +171,22 @@ class SanitySide(SideServicer):
         qp = qp_list[request.qp_id]
         qp.post_send(sr)
         qp.process_one_sr()
-        return RemoteWriteRequest()
+        return RemoteWriteResponse()
+
+    def RemoteWriteImm(self, request, context):
+        sg = SG(pos_in_mr=request.addr, length=request.len, lkey=request.lkey)
+        sr = SendWR(
+            opcode=WR_OPCODE.RDMA_WRITE_WITH_IMM,
+            sgl=sg,
+            send_flags=request.send_flag,
+            rmt_va=request.remote_addr,
+            rkey=request.remote_key,
+            imm_data_or_inv_rkey=request.imm_data
+        )
+        qp = qp_list[request.qp_id]
+        qp.post_send(sr)
+        qp.process_one_sr()
+        return RemoteWriteImmResponse()
 
     def RemoteSend(self, request, context):
         sg = SG(pos_in_mr=request.addr, length=request.len, lkey=request.lkey)
@@ -270,6 +289,10 @@ class SanitySide(SideServicer):
         expect_status = request.status
         qp = qp_list[request.qp_id]
         return CheckQpStatusResponse(same=(qp.status() == expect_status))
+    
+    # Notify CQ is not implemented in the python side
+    def NotifyCq(self, request, context):
+        return NotifyCqResponse()
 
 
 def default_retry_handler(barrier_cnt):

@@ -10,9 +10,10 @@ use lazy_static::lazy_static;
 use proto::message::{
     CheckQpStatusResponse, ConnectQpResponse, CreateCqResponse, CreateMrResponse, CreatePdResponse,
     CreateQpResponse, LocalCheckMemResponse, LocalRecvResponse, LocalWriteResponse,
-    ModifyQpResponse, OpenDeviceResponce, PollCompleteResponse, QueryGidResponse,
+    ModifyQpResponse, NotifyCqResponse, OpenDeviceResponce, PollCompleteResponse, QueryGidResponse,
     QueryPortResponse, RecvPktResponse, RemoteAtomicCasResponse, RemoteReadResponse,
-    RemoteSendResponse, RemoteWriteResponse, UnblockRetryResponse, VersionResponse,
+    RemoteSendResponse, RemoteWriteImmResponse, RemoteWriteResponse, UnblockRetryResponse,
+    VersionResponse,
 };
 use proto::side_grpc::{self, Side};
 use std::collections::HashMap;
@@ -607,5 +608,58 @@ impl Side for SideImpl {
         let resp = ModifyQpResponse::new();
         let f = sink.success(resp).map_err(|_| {}).map(|_| ());
         ctx.spawn(f);
+    }
+
+    fn remote_write_imm(
+        &mut self,
+        ctx: grpcio::RpcContext,
+        req: proto::message::RemoteWriteImmRequest,
+        sink: grpcio::UnarySink<proto::message::RemoteWriteImmResponse>,
+    ) {
+        rdma::ibv::remote_write_with_imm(
+            req.get_addr(),
+            req.get_len(),
+            req.get_lkey(),
+            req.get_remote_addr(),
+            req.get_remote_key(),
+            req.get_imm_data(),
+            *QP_MAP
+                .read()
+                .unwrap()
+                .get(req.get_qp_id().cast::<usize>())
+                .unwrap(),
+            CQ_MAP
+                .read()
+                .unwrap()
+                .get(req.get_cq_id().cast::<usize>())
+                .unwrap()
+                .0,
+            rdma_sys::ibv_send_flags(req.send_flag),
+        );
+
+        let resp = RemoteWriteImmResponse::default();
+        let f = sink.success(resp).map_err(|_| {}).map(|_| ());
+        ctx.spawn(f)
+    }
+
+    fn notify_cq(
+        &mut self,
+        ctx: grpcio::RpcContext,
+        req: proto::message::NotifyCqRequest,
+        sink: grpcio::UnarySink<proto::message::NotifyCqResponse>,
+    ) {
+        rdma::ibv::req_cq_notify(
+            CQ_MAP
+                .read()
+                .unwrap()
+                .get(req.get_cq_id().cast::<usize>())
+                .unwrap()
+                .0,
+            req.get_solicited_only().cast(),
+        );
+
+        let resp = NotifyCqResponse::default();
+        let f = sink.success(resp).map_err(|_| {}).map(|_| ());
+        ctx.spawn(f)
     }
 }

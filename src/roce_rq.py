@@ -851,7 +851,7 @@ class RXLogic:
                     wr_id=pending_recv_wr.id(),
                     status=WC_STATUS.WR_FLUSH_ERR,
                     # TODO: BUG: for write imm, this WC_OPCODE is RDMA_WRITE not RECV_RDMA_WITH_IMM
-                    opcode=WC_OPCODE.from_wr_op(req_ctx.wr_op()),
+                    opcode=WC_OPCODE.from_wr_op(QueueType.RQ, req_ctx.wr_op()),
                     length=pending_recv_wr.len(),
                     qpn=self.rq().sqpn(),
                     src_qp=self.rq().dqpn(),
