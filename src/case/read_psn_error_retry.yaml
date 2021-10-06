@@ -17,8 +17,7 @@ side_2:
     local_offset: 1
     len: 1
   - name: recv_pkt
-  - name: recv_pkt
-  - name: recv_pkt
+    cnt: 3
   - name: local_check
     seg: 
       - offset: 0
