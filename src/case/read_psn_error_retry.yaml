@@ -23,4 +23,4 @@ side_2:
       - offset: 0
         expected: 'ffee'
   - name: check_qp_status
-    status: 3
+    status: RTS

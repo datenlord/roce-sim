@@ -9,6 +9,7 @@ import concurrent.futures
 import time
 import threading
 import logging
+from roce_enum import RC, WC_OPCODE, WC_STATUS, QPS
 
 try:
     from yaml import CLoader as Loader
@@ -88,6 +89,7 @@ class TestCase:
             if side1_cmd:
                 tmp_future = executor.submit(
                     process_command,
+                    test_name,
                     side1_cmd,
                     self.side1,
                     info1,
@@ -101,6 +103,7 @@ class TestCase:
             if side2_cmd:
                 tmp_future = executor.submit(
                     process_command,
+                    test_name,
                     side2_cmd,
                     self.side2,
                     info2,
@@ -198,8 +201,15 @@ def recv_pkt(
         )
     )
 
-    expect_opcode = c_arg.get("op_code")
+    expect_opcode = c_arg.get("opcode")
     if expect_opcode:
+        if isinstance(expect_opcode, str):
+            try:
+                expect_opcode = RC[expect_opcode].value
+            except Exception:
+                logging.error(f"{expect_opcode} is not a valid rc opcode")
+                return False
+
         return expect_opcode == response.opcode
 
     return True
@@ -496,10 +506,22 @@ def poll_complete(
 
     opcode = c_arg.get("opcode")
     if opcode:
+        if isinstance(opcode, str):
+            try:
+                opcode = WC_OPCODE[opcode].value
+            except Exception:
+                logging.error(f"{opcode} is not a valid wc opcode")
+                return False
         request.opcode = opcode
 
     status = c_arg.get("status")
     if status:
+        if isinstance(status, str):
+            try:
+                status = WC_STATUS[status].value
+            except Exception:
+                logging.error(f"{status} is not a valid wc status")
+                return False
         request.status = status
 
     imm_data_or_inv_rkey = c_arg.get("imm_data_or_inv_rkey")
@@ -523,6 +545,13 @@ def check_qp_status(
     if not status:
         logging.error("status should be set")
         return False
+
+    if isinstance(status, str):
+        try:
+            status = QPS[status].value
+        except Exception:
+            logging.error(f"{status} is not a valid qp status")
+            return False
 
     response = self_stub.CheckQpStatus(
         message_pb2.CheckQpStatusRequest(status=status, qp_id=self_info.qp_id)
@@ -588,6 +617,7 @@ COMMAND_MAP: Final = {
 
 
 def process_command(
+    test_name,
     cmds,
     self_side: Side,
     self_info: SideInfo,
@@ -612,13 +642,17 @@ def process_command(
                     other_info,
                     other_stub,
                 ):
-                    logging.error(f'failed to executed command {c["name"]}')
+                    logging.error(
+                        f'failed to executed command {c["name"]} for case {test_name}'
+                    )
                     return False
             except Exception as e:
-                logging.error(f'failed to executed command {c["name"]}, {e}')
+                logging.error(
+                    f'failed to executed command {c["name"]} for case {test_name}, {e}'
+                )
                 return False
         else:
-            logging.error(f'command {c["name"]} is not in the definition')
+            logging.error(f'command {c["name"]} is not in the definition, for case {test_name}')
             return False
     return True
 

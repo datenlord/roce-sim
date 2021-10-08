@@ -9,9 +9,9 @@ side_1:
   - name: barrier
   - name: poll_complete
     len: 0
-    opcode: 129
+    opcode: RECV_RDMA_WITH_IMM
     imm_data_or_inv_rkey: 0x34120000
-    status: 0
+    status: SUCCESS
 
 side_2:
   - name: prepare
@@ -28,5 +28,5 @@ side_2:
     poll_cqe: false
   - name: poll_complete
     len: 0
-    opcode: 1
-    status: 0
+    opcode: RDMA_WRITE
+    status: SUCCESS

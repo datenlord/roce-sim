@@ -13,14 +13,14 @@ side_2:
     len: 1
   - name: recv_pkt
     poll_cqe: false
-    opcode: 2
+    opcode: RDMA_READ_RESPONSE_ONLY
   - name: poll_complete
     len: 1
-    opcode: 2
-    status: 0
+    opcode: RDMA_READ
+    status: SUCCESS
   - name: local_check
     seg: 
       - offset: 0
         expected: 'ff'
   - name: check_qp_status
-    status: 3
+    status: RTS
