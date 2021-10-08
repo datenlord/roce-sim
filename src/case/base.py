@@ -1,3 +1,5 @@
+from functools import partial
+from math import pi
 from config import Side
 from proto.side_pb2_grpc import SideStub
 from proto import message_pb2
@@ -9,6 +11,7 @@ import concurrent.futures
 import time
 import threading
 import logging
+import pickle
 from roce_enum import RC, WC_OPCODE, WC_STATUS, QPS
 
 try:
@@ -192,15 +195,23 @@ def recv_pkt(
     other_info: SideInfo,
     other_stub: SideStub,
 ):
+    check_pkt = c_arg.get("check_pkt")
     retry = c_arg.get("wait_for_retry", 0)
     poll_cqe = c_arg.get("poll_cqe", True)
     cnt = c_arg.get("cnt", 1)
-    response = self_stub.RecvPkt(
-        message_pb2.RecvPktRequest(
-            wait_for_retry=retry, poll_cqe=poll_cqe, qp_id=self_info.qp_id, cnt=cnt
-        )
+    request = message_pb2.RecvPktRequest(
+        wait_for_retry=retry,
+        poll_cqe=poll_cqe,
+        qp_id=self_info.qp_id,
+        cnt=cnt,
     )
 
+    if check_pkt:
+        request.check_pkt = pickle.dumps(check_pkt)
+
+    response = self_stub.RecvPkt(request)
+
+    result = True
     expect_opcode = c_arg.get("opcode")
     if expect_opcode:
         if isinstance(expect_opcode, str):
@@ -209,10 +220,12 @@ def recv_pkt(
             except Exception:
                 logging.error(f"{expect_opcode} is not a valid rc opcode")
                 return False
+        result = result and expect_opcode == response.opcode
 
-        return expect_opcode == response.opcode
+    if check_pkt:
+        result = result and response.check_pass
 
-    return True
+    return result
 
 
 def local_check(
@@ -652,7 +665,9 @@ def process_command(
                 )
                 return False
         else:
-            logging.error(f'command {c["name"]} is not in the definition, for case {test_name}')
+            logging.error(
+                f'command {c["name"]} is not in the definition, for case {test_name}'
+            )
             return False
     return True
 

@@ -20,6 +20,10 @@ side_2:
     old_value: 1
     new_value: 2
   - name: recv_pkt
+    check_pkt:
+      - header: AETH
+        field: code
+        expect: 0
   - name: barrier
   - name: local_check
     seg: 

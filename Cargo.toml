@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
-async-rdma= {git = "https://github.com/rogercloud/async-rdma", rev = "652d5f33"}
+async-rdma= {git = "https://github.com/rogercloud/async-rdma", rev = "4311dcee"}
 bincode = "1.3"
 clap = "2.33"
 env_logger = "0.8"

@@ -15,11 +15,9 @@ from proto.message_pb2 import (
     QueryPortResponse,
     RecvPktResponse,
     RemoteAtomicCasResponse,
-    RemoteReadRequest,
     RemoteReadResponse,
     RemoteSendResponse,
     RemoteWriteImmResponse,
-    RemoteWriteRequest,
     RemoteWriteResponse,
     UnblockRetryResponse,
     VersionResponse,
@@ -35,6 +33,19 @@ from threading import Lock
 from functools import partial
 import time
 import logging
+import pickle
+from roce import (
+    GRH,
+    AETH,
+    RETH,
+    AtomicAckETH,
+    AtomicETH,
+    ImmDt,
+    IETH,
+    RETHImmDt,
+    CNPPadding,
+    BTH,
+)
 
 GLOBAL_ROCE = RoCEv2()
 pd_lock = Lock()
@@ -181,7 +192,7 @@ class SanitySide(SideServicer):
             send_flags=request.send_flag,
             rmt_va=request.remote_addr,
             rkey=request.remote_key,
-            imm_data_or_inv_rkey=request.imm_data
+            imm_data_or_inv_rkey=request.imm_data,
         )
         qp = qp_list[request.qp_id]
         qp.post_send(sr)
@@ -213,17 +224,55 @@ class SanitySide(SideServicer):
         return RemoteAtomicCasResponse()
 
     def RecvPkt(self, request, context):
+        pkt_check_result = True
+
+        def check(ck_list, pkt):
+            for ck in ck_list:
+                header = ck.get("header")
+                field = ck.get("field")
+                expect = ck.get("expect")
+                if not header:
+                    logging.error("header should be set in recv_pkt check list")
+                    pkt_check_result = False
+                    break
+                if not field:
+                    logging.error("field should be set in recv_pkt check list")
+                    pkt_check_result = False
+                    break
+                header_class = globals().get(header)
+                if not header_class:
+                    logging.error(f"{header} is not a defined HEADER")
+                    pkt_check_result = False
+                    break
+                if not hasattr(pkt[header_class], field):
+                    logging.error(f"{field} is not defined in {header} HEADER")
+                    pkt_check_result = False
+                    break
+                if expect != getattr(pkt[header_class], field):
+                    logging.error(
+                        f"{header}.{field} is {getattr(pkt[header_class], field)}, but expect {expect}"
+                    )
+                    pkt_check_result = False
+                    break
+
+        check_fun = None
+        if request.HasField("check_pkt"):
+            check_pkt = pickle.loads(request.check_pkt)
+            check_fun = partial(check, check_pkt)
+
         retry_handler = (
             partial(default_retry_handler, request.wait_for_retry)
             if request.wait_for_retry
             else None
         )
 
-        opcode = GLOBAL_ROCE.recv_pkts(request.cnt, retry_handler=retry_handler)[-1]
+        opcode = GLOBAL_ROCE.recv_pkts(
+            request.cnt, retry_handler=retry_handler, check_pkt=check_fun
+        )[-1]
         if request.poll_cqe:
             qp = qp_list[request.qp_id]
             qp.poll_cq()
-        return RecvPktResponse(opcode=opcode)
+        return RecvPktResponse(opcode=opcode, check_pass=pkt_check_result)
 
     def ModifyQp(self, request, context):
         qp = qp_list[request.qp_id]
@@ -290,7 +339,7 @@ class SanitySide(SideServicer):
         expect_status = request.status
         qp = qp_list[request.qp_id]
         return CheckQpStatusResponse(same=(qp.status() == expect_status))
-    
+
     # Notify CQ is not implemented in the python side
     def NotifyCq(self, request, context):
         return NotifyCqResponse()
