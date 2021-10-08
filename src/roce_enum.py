@@ -159,9 +159,11 @@ class WC_FLAGS(IntFlag):
     TM_MATCH = 32
     TM_DATA_VALID = 64
 
+
 class QueueType(IntEnum):
     SQ = 0
     RQ = 1
+
 
 class WC_OPCODE(IntEnum):
     SEND = 0

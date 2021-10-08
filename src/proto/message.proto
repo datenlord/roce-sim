@@ -151,10 +151,14 @@ message RecvPktRequest {
     bool poll_cqe = 2;
     uint32 qp_id = 3;
     uint32 cnt = 4;
+    oneof check_pkt_option {
+        bytes check_pkt = 5;
+    }
 }
 
 message RecvPktResponse {
     uint32 opcode = 1;
+    bool check_pass = 2;
 }
 
 message LocalRecvRequest {
