@@ -13,8 +13,10 @@ class Util:
         op = pkt[BTH].opcode
         if RC.first_req_pkt(op) or op == RC.RDMA_READ_RESPONSE_FIRST:
             assert len(pkt[Raw].load) == mtu
+            assert pkt[BTH].padcount == 0
         elif RC.mid_req_pkt(op) or op == RC.RDMA_READ_RESPONSE_MIDDLE:
             assert len(pkt[Raw].load) == mtu
+            assert pkt[BTH].padcount == 0
         elif RC.last_req_pkt(op) or op == RC.RDMA_READ_RESPONSE_LAST:
             assert len(pkt[Raw].load) <= mtu and len(pkt[Raw].load) > 0
         elif RC.only_req_pkt(op) or op == RC.RDMA_READ_RESPONSE_ONLY:

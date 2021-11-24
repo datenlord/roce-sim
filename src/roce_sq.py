@@ -405,10 +405,11 @@ class RetryLogic:
         self.pending_wr_ctx_dict = {}
         # The request packet PSN -> WR SSN
         self.req_pkt_psn_wr_ssn_dict = {}
-        # Keep track of the oldest sent packet
-        self.oldest_sent_ts_ns = None
+        # Keep track of the oldest timestamp of posted request packet needs ACK or received ACK
+        self.oldest_post_send_or_ack_ts_ns = None
 
         self.pending_rd_atomic_wr_num = 0
+        self.pending_wr_need_ack_list = []
 
     def resp_logic(self):
         return self.send_q.resp_logic
@@ -418,6 +419,9 @@ class RetryLogic:
 
     def rd_atomic_wr_num(self):
         return self.pending_rd_atomic_wr_num
+
+    def wr_need_ack_list(self):
+        return self.pending_wr_need_ack_list
 
     def cq(self):
         return self.send_q.cq()
@@ -469,7 +473,8 @@ class RetryLogic:
         if read_or_atomic:
             self.pending_rd_atomic_wr_num += 1
         if read_or_atomic or (SEND_FLAGS.SIGNALED & wr.flags()):
-            self.update_oldest_sent_ts()  # Update oldest_sent_ts if is None
+            self.pending_wr_need_ack_list.append(wr)
+            self.update_oldest_sent_ts()  # Update oldest_sent_ts if it is None
 
     def add_req_pkt(self, wr_ssn, pkt):
         pkt_psn = pkt[BTH].psn
@@ -496,11 +501,15 @@ class RetryLogic:
     def delete_wr_ctx(self, ssn_to_delete):
         wr_ctx = self.pending_wr_ctx_dict.pop(ssn_to_delete)
         wr_op = wr_ctx.wr().wr_op()
-        if wr_op == WR_OPCODE.RDMA_READ or WR_OPCODE.atomic(wr_op):
+        read_or_atomic = wr_op == WR_OPCODE.RDMA_READ or WR_OPCODE.atomic(wr_op)
+        if read_or_atomic:
             self.pending_rd_atomic_wr_num -= 1
             assert (
                 self.pending_rd_atomic_wr_num >= 0
             ), "pending_rd_atomic_wr_num should not < 0"
+        if read_or_atomic or (SEND_FLAGS.SIGNALED & wr.flags()):
+            self.pending_wr_need_ack_list.pop(0)
+
         # Clean up finished request PSN
         wr_pkt_psn_lst = wr_ctx.get_pkt_psn_lst()
         for req_pkt_psn in wr_pkt_psn_lst:
@@ -524,39 +533,44 @@ class RetryLogic:
         self.pending_wr_ctx_dict.clear()  # Delete all pending WR
         self.req_pkt_psn_wr_ssn_dict.clear()  # Delete all pending request data
 
-    # oldest_sent_ts_ns is updated in 1 case:
-    # - oldest_sent_ts_ns is None and there's new packet to send
+    # oldest_post_send_or_ack_ts_ns is updated in 1 case:
+    # - oldest_post_send_or_ack_ts_ns is None and there are pending WRs waiting for ACK
     def update_oldest_sent_ts(self):
-        if self.oldest_sent_ts_ns is None:
-            if not self.empty():  # There are unacked requests
-                self.oldest_sent_ts_ns = time.time_ns()
+        if self.oldest_post_send_or_ack_ts_ns is None:
+            if self.wr_need_ack_list():  # There are requests waiting for ACK
+                self.oldest_post_send_or_ack_ts_ns = time.time_ns()
                 logging.debug(
-                    f"set oldest_sent_ts_ns={self.oldest_sent_ts_ns} to current timestamp"
+                    f"set oldest_post_send_or_ack_ts_ns={self.oldest_post_send_or_ack_ts_ns} to current timestamp"
                 )
             else:
-                logging.debug(f"no pending requests, oldest_sent_ts_ns remains to None")
-                # self.oldest_sent_ts_ns = None  # No outstanding request
+                logging.debug(
+                    f"no pending requests, oldest_post_send_or_ack_ts_ns remains to None"
+                )
+                # No outstanding requests waiting for ACK
+                # self.oldest_post_send_or_ack_ts_ns = None
         logging.debug(
-            f"oldest_sent_ts_ns={self.oldest_sent_ts_ns} is set, no need to update"
+            f"oldest_post_send_or_ack_ts_ns={self.oldest_post_send_or_ack_ts_ns} is set, no need to update"
         )
 
-    # oldest_sent_ts_ns is reset in 2 cases:
+    # oldest_post_send_or_ack_ts_ns is reset in 2 cases:
     # - ACK or NAK received
     # - timeout detected and retry
     def reset_oldest_sent_ts(self):
-        if self.empty():  # There are no unakced requests
-            logging.debug(f"reset oldest_sent_ts_ns to None, since no pending requests")
-            self.oldest_sent_ts_ns = None
+        if not self.wr_need_ack_list():  # There are no WRs waiting for ACK
+            logging.debug(
+                f"reset oldest_post_send_or_ack_ts_ns to None, since no requests waiting for ACK"
+            )
+            self.oldest_post_send_or_ack_ts_ns = None
         else:
             cur_ts_ns = time.time_ns()
-            logging.debug(f"reset oldest_sent_ts_ns={cur_ts_ns}")
-            self.oldest_sent_ts_ns = cur_ts_ns
+            logging.debug(f"reset oldest_post_send_or_ack_ts_ns={cur_ts_ns}")
+            self.oldest_post_send_or_ack_ts_ns = cur_ts_ns
 
     def check_timeout_and_retry(self):
-        if self.oldest_sent_ts_ns is not None:
+        if self.oldest_post_send_or_ack_ts_ns is not None:
             cur_ts_ns = time.time_ns()
             timeout_ns = Util.timeout_to_ns(self.timeout())
-            if self.oldest_sent_ts_ns + timeout_ns < cur_ts_ns:
+            if self.oldest_post_send_or_ack_ts_ns + timeout_ns < cur_ts_ns:
                 assert (
                     Util.psn_compare(
                         self.mpsn(),
@@ -567,8 +581,8 @@ class RetryLogic:
                 ), "when timeout there should have outstanding requests"
                 logging.info(
                     f"SQ={self.sqpn()} detected timeout, timeout_ns={timeout_ns}, \
-                        cur_ts_ns={cur_ts_ns}, oldest_sent_ts_ns={self.oldest_sent_ts_ns}, \
-                        wait_time_ns={cur_ts_ns - self.oldest_sent_ts_ns}, \
+                        cur_ts_ns={cur_ts_ns}, oldest_post_send_or_ack_ts_ns={self.oldest_post_send_or_ack_ts_ns}, \
+                        wait_time_ns={cur_ts_ns - self.oldest_post_send_or_ack_ts_ns}, \
                         and retry from PSN={self.mpsn()} to PSN={self.npsn()} (not included)"
                 )
                 self.partial_retry_one_wr(
@@ -883,7 +897,8 @@ class RespLogic:
             logging.info(
                 f"SQ={self.sqpn()} received ghost response: {resp.show(dump=True)}"
             )
-        else:  # SQ discard duplicate or illegal response, except for unsolicited flow control credit
+        else:
+            # SQ discard duplicate or illegal response, except for unsolicited flow control credit
             psn_comp_res = Util.psn_compare(resp[BTH].psn, self.mpsn(), self.npsn())
             assert psn_comp_res != 0, "should handle duplicate or illegal response"
             if psn_comp_res < 0:  # Dup resp
@@ -996,25 +1011,28 @@ class RespLogic:
             f"min unacked PSN={self.mpsn()}, \
                 next PSN={self.npsn()}, \
                 implicit_ack_wr_num={implicit_ack_wr_num}, \
-                pending_rd_atomic_wr_num={self.retry_logic().rd_atomic_wr_num()}"
+                pending_rd_atomic_wr_num={self.retry_logic().rd_atomic_wr_num()}, \
+                pending_wr_need_ack_list len={len(self.retry_logic().wr_need_ack_list())}"
         )
 
     def ack_send_or_write_req(self, send_or_write_wr_ssn, psn_to_ack=None):
         # ACK the whole request WR or ACK the request WR up to the input PSN
         wr_ctx = self.retry_logic().get_wr_ctx(send_or_write_wr_ssn)
         wr_op = wr_ctx.wr().wr_op()
+        ackreq = True if SEND_FLAGS.SIGNALED & wr_ctx.wr().flags() else False
         if WR_OPCODE.send(wr_op) or WR_OPCODE.write(wr_op):
             ack_whole_wr = False
             if psn_to_ack is None:
-                ack_whole_wr = True
+                # Implicit ACK send and write, since psn_to_ack is None
+                # Generate CQE if the WR set ackreq
+                ack_whole_wr = ackreq
             else:
                 pkt_to_ack = wr_ctx.get_req_pkt(psn_to_ack)
                 rc_op = pkt_to_ack[BTH].opcode
-                # Only to explicit or implicit ACK send and write
-                # Generate CQE if the packet to ack is the last one
+                # Explicit ACK send and write, since psn_to_ack is not None
+                # Generate CQE only if the packet to ack is the last packet of the request
                 ack_whole_wr = RC.last_req_pkt(rc_op) or RC.only_req_pkt(rc_op)
-            if ack_whole_wr:
-                # Generate CQE for each acked send or write WR
+            if ack_whole_wr:  # Generate CQE
                 cqe = CQE(
                     wr_id=wr_ctx.wr().id(),
                     status=WC_STATUS.SUCCESS,

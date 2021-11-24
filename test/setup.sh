@@ -17,6 +17,7 @@ if [ -z "$HAS_RXE_MOD" ]; then
     sudo modprobe ib_core
     sudo modprobe rdma_ucm
 
+
     # Change Kernel source version if soft-roce or soft-iwarp build fail
     export KERNEL_VERSION=5.11.20
     export KERNEL_MAJOR_VERSION=`echo $KERNEL_VERSION | cut -d '.' -f 1`
