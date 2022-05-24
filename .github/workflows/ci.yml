@@ -21,7 +21,7 @@ jobs:
           sudo apt install -y protobuf-compiler python3.9 net-tools librdmacm-dev ibverbs-utils rdmacm-utils perftest
           python3 -m pip install grpcio grpcio-tools scapy black
           pip install --upgrade protobuf
-          cargo install protobuf-codegen
+          cargo install --version 2.25.0 protobuf-codegen
           cargo install grpcio-compiler
           ./test/setup.sh
       - name: Compile
