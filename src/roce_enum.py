@@ -14,9 +14,9 @@ EMPTY_WC_FLAG = 0
 ROCE_PORT = 4791
 RSRV_AETH_NAK_VAL = 31
 
-MAX_SSN = 2 ** 24
-MAX_MSN = 2 ** 24
-MAX_PSN = 2 ** 24
+MAX_SSN = 2**24
+MAX_MSN = 2**24
+MAX_PSN = 2**24
 
 MAX_PENDING_REQ_NUM = 10
 
@@ -405,14 +405,10 @@ class RC(IntEnum):
 
     @staticmethod
     def response(op):
-        return (
-            op
-            in [
-                RC.ACKNOWLEDGE,
-                RC.ATOMIC_ACKNOWLEDGE,
-            ]
-            or RC.read_resp(op)
-        )
+        return op in [
+            RC.ACKNOWLEDGE,
+            RC.ATOMIC_ACKNOWLEDGE,
+        ] or RC.read_resp(op)
 
     @staticmethod
     def has_imm(op):
