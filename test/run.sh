@@ -70,5 +70,5 @@ docker run --rm -d -v `pwd`:`pwd` -w `pwd` --net=${DOCKER_NETWORK} --ip=${CONTAI
 docker logs -f python_side > ../python_side.log &
 
 # Wait a while to Start Manager Python
-sleep 2
+sleep 5
 python3 ./sanity_manager.py ../test/case.yaml
