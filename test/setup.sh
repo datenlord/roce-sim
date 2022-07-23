@@ -31,25 +31,23 @@ if [ -z "$HAS_RXE_MOD" ]; then
     tar xf linux-$KERNEL_VERSION.tar.xz
 
     cp -r linux-$KERNEL_VERSION/drivers/infiniband/sw/rxe/ .
-    cp test/rxe/Kbuild rxe/
-    cp test/rxe/Makefile rxe/
     cp -r linux-$KERNEL_VERSION/drivers/infiniband/sw/siw/ .
-    cp test/siw/Kbuild siw/
-    cp test/siw/Makefile siw/
 
     # Build and install soft-roce kernel module
     cd ./rxe
-    # cp ../test/rxe/Kbuild .
-    # mv Makefile Makefile.orig
-    # cp ../test/rxe/Makefile .
+    cp Makefile Makefile.orig
+    mv Makefile Kbuild
+    sed -i 's/$(CONFIG_RDMA_RXE)/m/g' Kbuild
+    cp ../test/rxe/Makefile .
     make
     sudo insmod ./rdma_rxe.ko
 
     # Build and install softiwarp kernel module
     cd ../siw
-    # cp ../test/siw/Kbuild .
-    # mv Makefile Makefile.orig
-    # cp ../test/siw/Makefile .
+    cp Makefile Makefile.orig
+    mv Makefile Kbuild
+    sed -i 's/$(CONFIG_RDMA_RXE)/m/g' Kbuild
+    cp ../test/siw/Makefile .
     make
     sudo insmod ./siw.ko
 fi
