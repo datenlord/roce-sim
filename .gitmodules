@@ -1,0 +1,4 @@
+[submodule "rdma-test"]
+	path = rdma-test
+	url = https://github.com/GTwhy/rdma-test.git
+	branch = main
