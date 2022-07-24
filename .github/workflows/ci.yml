@@ -10,6 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Git Sumbodule Update
+        run: |
+          git submodule update --remote --recursive
       - name: Check out Scapy code
         uses: actions/checkout@v2
         with:
@@ -23,7 +28,7 @@ jobs:
           pip install --upgrade protobuf
           cargo install --version 2.25.0 protobuf-codegen
           cargo install grpcio-compiler
-          ./test/setup.sh
+          ./rdma-env-setup/scripts/setup.sh
       - name: Compile
         run: |
           # Python format check
