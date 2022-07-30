@@ -3,3 +3,5 @@
 /src/proto/*py
 Cargo.lock
 /.vscode/
+*.pyc
+*.log
