@@ -25,4 +25,5 @@ service Side {
     rpc ModifyQp(ModifyQpRequest) returns (ModifyQpResponse) {}
     rpc RemoteWriteImm(RemoteWriteImmRequest) returns (RemoteWriteImmResponse) {}
     rpc NotifyCq(NotifyCqRequest) returns (NotifyCqResponse) {}
+    rpc SetHook(SetHookRequest) returns (SetHookResponse) {}
 }

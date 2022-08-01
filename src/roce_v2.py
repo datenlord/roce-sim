@@ -62,6 +62,7 @@ class QP:
             rq_psn=rq_psn,
         )
         self.pd.add_qp(self)
+        self.recv_hook = None
 
     def modify_qp(
         self,
@@ -178,6 +179,9 @@ class QP:
     def recv_pkt(self, pkt, retry_handler):
         assert self.qps in [QPS.RTS, QPS.RTR], "QP state is not RTS or RTR"
 
+        if self.recv_hook != None:
+            pkt = self.recv_hook(pkt)
+
         logging.debug(
             f"QP={self.qpn()} received packet with length={len(pkt)}: "
             + pkt.show(dump=True)
@@ -251,6 +255,9 @@ class QP:
 
     def get_async_event(self):
         pass  # TODO: implement async event
+
+    def reg_recv_hook(self, recv_hook):
+        self.recv_hook = recv_hook
 
 
 class RoCEv2:

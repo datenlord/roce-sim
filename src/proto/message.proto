@@ -274,3 +274,17 @@ message NotifyCqRequest {
 
 message NotifyCqResponse {
 }
+
+message SetHookRequest {
+    uint32 qp_id = 1;
+    enum HookType {
+        Send = 0;
+        Recv = 1;
+    }
+    HookType hook_type = 2;
+    string hook_name = 3;
+}
+
+message SetHookResponse {
+    bool is_success = 1;
+}

@@ -1447,6 +1447,7 @@ class SQ:
         self.tx_logic = TXLogic(send_q=self, sq_psn=sq_psn)
         self.resp_logic = RespLogic(send_q=self, sq_psn=sq_psn, wr_ssn=self.ssn)
         self.retry_logic = RetryLogic(send_q=self)
+        self.send_hook = None
 
     def modify(
         self,
@@ -1622,6 +1623,10 @@ class SQ:
         send(l3_pkt)
 
     def send_req_pkt(self, wr_ssn, req_pkt, real_send=True):
+
+        if self.send_hook:
+            req_pkt = self.send_hook(req_pkt)
+
         req_pkt_psn = req_pkt[BTH].psn
         logging.debug(
             f"SQ={self.sqpn()} send request packet with PSN={req_pkt_psn} for WR SSN={wr_ssn}"
@@ -1635,3 +1640,6 @@ class SQ:
 
     def handle_response(self, resp_pkt):
         self.resp_logic.handle_response(resp_pkt)
+
+    def reg_send_hook(self, send_hook):
+        self.send_hook = send_hook

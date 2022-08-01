@@ -608,6 +608,25 @@ def notify_cq(
     return True
 
 
+def set_hook(
+    c_arg,
+    self_side: Side,
+    self_info: SideInfo,
+    self_stub: SideStub,
+    other_side: Side,
+    other_info: SideInfo,
+    other_stub: SideStub,
+):
+    hook_type = c_arg.get("hook_type")
+    hook_name = c_arg.get("hook_name")
+
+    return self_stub.SetHook(
+        message_pb2.SetHookRequest(
+            qp_id=self_info.qp_id, hook_type=hook_type, hook_name=hook_name
+        )
+    )
+
+
 COMMAND_MAP: Final = {
     "connect_qp": connect_qp,
     "sleep": sleep,
@@ -626,6 +645,7 @@ COMMAND_MAP: Final = {
     "check_qp_status": check_qp_status,
     "modify_qp": modify_qp,
     "notify_cq": notify_cq,
+    "set_hook": set_hook,
 }
 
 

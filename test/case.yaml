@@ -20,3 +20,4 @@ test_cases:
   - "atomic_cas_success"
   - "read_psn_error_retry"
   - "write_imm_success"
+  - "sim_read_partial_retry"
