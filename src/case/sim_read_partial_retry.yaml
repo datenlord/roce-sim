@@ -1,0 +1,42 @@
+side_1: 
+  - name: prepare
+  - name: connect_qp
+    mtu: 256
+  - name: local_write
+    offset: 0
+    content: 'ff'
+  - name: barrier
+
+side_2:
+  - name: prepare
+  - name: connect_qp
+    mtu: 256
+  - name: set_hook
+    hook_type: 0
+    hook_name: sim_read_partial_retry_hook
+  - name: barrier
+  - name: remote_read
+    len: 1024
+  - name: recv_pkt
+    cnt: 4
+    poll_cqe: false
+  - name: poll_complete
+    len: 1024
+    opcode: RDMA_READ
+    status: SUCCESS
+  - name: local_check
+    seg: 
+      - offset: 0
+        expected: 'ff'    
+  - name: remote_read
+    remote_offset: 256
+    len: 768
+  - name: recv_pkt
+    poll_cqe: false
+    cnt: 3
+  - name: local_check
+    seg: 
+      - offset: 0
+        expected: 'ff'
+  - name: check_qp_status
+    status: RTS

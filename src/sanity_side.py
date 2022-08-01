@@ -22,6 +22,8 @@ from proto.message_pb2 import (
     UnblockRetryResponse,
     VersionResponse,
     QueryGidResponse,
+    SetHookRequest,
+    SetHookResponse,
 )
 from proto.side_pb2_grpc import SideServicer, add_SideServicer_to_server
 from concurrent import futures
@@ -344,6 +346,25 @@ class SanitySide(SideServicer):
     def NotifyCq(self, request, context):
         return NotifyCqResponse()
 
+    def SetHook(self, request, context):
+        import hooks
+
+        try:
+            hook = getattr(hooks, request.hook_name)
+            qp = qp_list[request.qp_id]
+            hook_type = request.hook_type
+            if hook_type == hooks.HOOK_TYPE.SEND:
+                qp.sq.reg_send_hook(hook)
+            elif hook_type == hooks.HOOK_TYPE.RECV:
+                qp.reg_recv_hook(hook)
+            else:
+                logging.error(f"wrong hook type {request.hook_type}")
+                return SetHookResponse(is_success=False)
+            return SetHookResponse(is_success=True)
+        except:
+            logging.error(f"can not find hook fn {request.hook_name}")
+            return SetHookResponse(is_success=False)
+
 
 def default_retry_handler(barrier_cnt):
     global retry_count, retry_lock
@@ -358,6 +379,7 @@ def default_retry_handler(barrier_cnt):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
     ip_addr = argv[1]
     port = argv[2]
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
