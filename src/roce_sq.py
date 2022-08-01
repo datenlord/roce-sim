@@ -360,19 +360,22 @@ class ReadRespCtx(RespCtx):
             )
 
         read_dlen = self.data_size()
-        read_laddr = self.addr()
+        if self.cur_read_offset < self.addr():
+            assert self.cur_read_offset == 0
+            self.cur_read_offset = self.addr()
+
         if Raw in read_resp_pkt:
             read_lkey = self.lkey()
             read_mr = self.pd().get_mr(read_lkey)
             self.cur_read_offset += Util.write_to_mr(
                 dst_mr=read_mr,
-                write_to_mr_addr=read_laddr,
+                write_to_mr_addr=self.cur_read_offset,
                 data_pkt=read_resp_pkt,
             )
 
         if rc_op == RC.RDMA_READ_RESPONSE_LAST or rc_op == RC.RDMA_READ_RESPONSE_ONLY:
             # Handle locally detected error: Length error / Requester Class B
-            if self.cur_read_offset != read_dlen:
+            if self.cur_read_offset - self.addr() != read_dlen:
                 logging.error(
                     f"SQ={self.sqpn()} read response data size not match DMA length"
                 )
