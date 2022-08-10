@@ -1,0 +1,29 @@
+side_1: 
+  - name: prepare
+  - name: connect_qp
+    mtu: 256
+  - name: barrier
+  - name: barrier
+  - name: local_check
+    seg: 
+      - offset: 0
+        expected: 'ff'
+side_2:
+  - name: prepare
+  - name: connect_qp
+    mtu: 256
+  - name: set_hook
+    hook_type: 0
+    hook_name: rxe_write_partial_retry_hook
+  - name: local_write
+    offset: 0
+    content: 'ff'
+  - name: barrier
+  - name: remote_write
+    len: 1024
+  - name: recv_pkt
+    check_pkt:
+      - header: AETH
+        field: code
+        expect: 3
+  - name: barrier
