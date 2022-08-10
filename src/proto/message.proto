@@ -280,6 +280,7 @@ message SetHookRequest {
     enum HookType {
         Send = 0;
         Recv = 1;
+        RESP = 2;
     }
     HookType hook_type = 2;
     string hook_name = 3;

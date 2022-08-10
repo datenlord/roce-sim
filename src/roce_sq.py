@@ -1625,7 +1625,7 @@ class SQ:
     def send_req_pkt(self, wr_ssn, req_pkt, real_send=True):
 
         if self.send_hook:
-            req_pkt = self.send_hook(req_pkt)
+            wr_ssn, req_pkt, real_send = self.send_hook(wr_ssn, req_pkt, real_send)
 
         req_pkt_psn = req_pkt[BTH].psn
         logging.debug(

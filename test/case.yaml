@@ -21,3 +21,5 @@ test_cases:
   - "read_psn_error_retry"
   - "write_imm_success"
   - "sim_read_partial_retry"
+  - "rxe_write_partial_retry"
+  - "sim_write_partial_retry"

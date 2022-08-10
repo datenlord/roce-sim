@@ -711,6 +711,10 @@ class RXLogic:
             / UDP(dport=ROCE_PORT, sport=self.rq().sqpn())
             / resp
         )
+
+        if self.recv_q.resp_hook != None:
+            pkt, save_resp_pkt = self.recv_q.resp_hook(pkt, save_resp_pkt)
+
         cpsn = pkt[BTH].psn
         if save_resp_pkt:
             self.resp_pkt_dict[cpsn] = pkt
@@ -871,6 +875,8 @@ class RQ:
         self.comp_queue = cq
         self.rx_logic = RXLogic(rq=self, rq_psn=rq_psn)
 
+        self.resp_hook = None
+
     def modify(self, rq_psn=None):
         self.rx_logic.modify(rq_psn=rq_psn)
 
@@ -956,3 +962,6 @@ class RQ:
         else:
             self.qp.add_async_event(EVENT_TYPE.from_wc_status(err_wc_status))
         self.qp.flush()
+
+    def reg_resp_hook(self, resp_hook):
+        self.resp_hook = resp_hook

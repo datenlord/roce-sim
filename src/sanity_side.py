@@ -357,6 +357,8 @@ class SanitySide(SideServicer):
                 qp.sq.reg_send_hook(hook)
             elif hook_type == hooks.HOOK_TYPE.RECV:
                 qp.reg_recv_hook(hook)
+            elif hook_type == hooks.HOOK_TYPE.RESP:
+                qp.rq.reg_resp_hook(hook)
             else:
                 logging.error(f"wrong hook type {request.hook_type}")
                 return SetHookResponse(is_success=False)
