@@ -179,6 +179,8 @@ class QP:
     def recv_pkt(self, pkt, retry_handler):
         assert self.qps in [QPS.RTS, QPS.RTR], "QP state is not RTS or RTR"
 
+        # We set recv hook point here because we can change some parts of package here to simulate
+        # an error or something else before any other operations.
         if self.recv_hook != None:
             pkt = self.recv_hook(pkt)
 
