@@ -12,7 +12,7 @@ side_2:
   - name: connect_qp
     mtu: 256
   - name: set_hook
-    hook_type: 0
+    hook_type: send
     hook_name: sim_read_partial_retry_hook
   - name: barrier
   - name: remote_read

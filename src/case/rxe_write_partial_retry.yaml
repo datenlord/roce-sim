@@ -13,7 +13,7 @@ side_2:
   - name: connect_qp
     mtu: 256
   - name: set_hook
-    hook_type: 0
+    hook_type: send
     hook_name: rxe_write_partial_retry_hook
   - name: local_write
     offset: 0
