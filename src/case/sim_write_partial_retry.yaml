@@ -15,7 +15,7 @@ side_2:
   - name: connect_qp
     mtu: 256
   - name: set_hook
-    hook_type: 2
+    hook_type: resp
     hook_name: sim_write_partial_retry_hook
   - name: barrier
   - name: recv_pkt

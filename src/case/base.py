@@ -608,6 +608,13 @@ def notify_cq(
     return True
 
 
+HOOKS_MAP: Final = {
+    "send": 0,
+    "recv": 1,
+    "resp": 2,
+}
+
+
 def set_hook(
     c_arg,
     self_side: Side,
@@ -617,7 +624,7 @@ def set_hook(
     other_info: SideInfo,
     other_stub: SideStub,
 ):
-    hook_type = c_arg.get("hook_type")
+    hook_type = HOOKS_MAP[c_arg.get("hook_type")]
     hook_name = c_arg.get("hook_name")
 
     return self_stub.SetHook(
