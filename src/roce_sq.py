@@ -1624,6 +1624,10 @@ class SQ:
 
     def send_req_pkt(self, wr_ssn, req_pkt, real_send=True):
 
+        # We set send hook point here because the RDMA part(transport layer) of package is assembled for routine process,
+        # and then we can change some parts of it here to simulate an error or something else.
+        # We can also control whether the packet is actually sent, and we don't need to change the content of network layer
+        # so we should not put this point in `do_send_pkt`.
         if self.send_hook:
             wr_ssn, req_pkt, real_send = self.send_hook(wr_ssn, req_pkt, real_send)
 

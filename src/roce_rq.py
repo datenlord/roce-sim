@@ -704,6 +704,12 @@ class RXLogic:
         elif not self.rq().dgid():
             assert False, f"BUG: RQ={self.sqpn()} has no destination GID"
 
+        # We set resp hook point here because the RDMA part(transport layer) of package is assembled for routine process,
+        # and then we can change some parts of it here to simulate an error or something else.
+        # We don't need to change the content of network layer so we should not move this hook point down.
+        if self.recv_q.resp_hook != None:
+            resp, save_resp_pkt = self.recv_q.resp_hook(resp, save_resp_pkt)
+
         if Raw in resp:
             resp = Util.add_padding_if_needed(resp)
         pkt = (
@@ -711,9 +717,6 @@ class RXLogic:
             / UDP(dport=ROCE_PORT, sport=self.rq().sqpn())
             / resp
         )
-
-        if self.recv_q.resp_hook != None:
-            pkt, save_resp_pkt = self.recv_q.resp_hook(pkt, save_resp_pkt)
 
         cpsn = pkt[BTH].psn
         if save_resp_pkt:
