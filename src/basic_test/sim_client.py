@@ -2,6 +2,9 @@ import argparse
 import logging
 import socket
 import struct
+import sys
+
+sys.path.append("..")
 from roce_enum import *
 from roce_util import Util
 from roce_v2 import *
@@ -11,18 +14,16 @@ MR_SIZE = 1024
 MSG_SIZE = MR_SIZE - POS_IN_MR
 
 SRC_PORT = 9527
+DST_PORT = 9527
 
-# S_RKEY = '00000208'
-# S_QPN = '00000011'
-S_LID = 0
-# S_GID = '00000000000000000000ffffc0a87aee'
-S_MAX_RD_ATOMIC = 10
-S_MIN_RNR_TIMER = 1  # 0.01 usec
-S_PSN = 1000
-S_RETRY_CNT = 3
-S_RNR_RETRY = 3
-S_TIMEOUT = 17  # 536.9 msec
-S_VA = "000056482bb76120"
+C_LID = 0
+C_MAX_RD_ATOMIC = 10
+C_MIN_RNR_TIMER = 1  # 0.01 usec
+C_PSN = 10000
+C_RETRY_CNT = 3
+C_RNR_RETRY = 3
+C_TIMEOUT = 17  # 536.9 msec
+C_VA = "000056482bb76120"
 
 ReceiveReady = 0
 SendSize = 1
@@ -37,11 +38,12 @@ SendOverSize = 9
 SendRetryRNR = 10
 SendRetrySeq = 11
 
-parser = argparse.ArgumentParser(description="Input server IP")
+parser = argparse.ArgumentParser(description="Input server IP and client IP")
 parser.add_argument("-s", action="store", dest="src_ip")
+parser.add_argument("-d", action="store", dest="dst_ip")
 arg_res = parser.parse_args()
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 # Build RoCE data structure
 roce = RoCEv2()
@@ -56,7 +58,7 @@ qp = roce.create_qp(
     | ACCESS_FLAGS.REMOTE_ATOMIC,
 )
 mr = pd.reg_mr(
-    va=int(S_VA, 16),
+    va=int(C_VA, 16),
     length=MR_SIZE,
     access_flags=ACCESS_FLAGS.LOCAL_WRITE
     | ACCESS_FLAGS.REMOTE_WRITE
@@ -66,55 +68,14 @@ mr = pd.reg_mr(
 )
 mr.write(byte_data=b"000000001234567890ABCEDFGHIJKLMNOPQRSTUVWXYZ")
 
-# Wait for connection
+# Connect to server
 udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-server_bind_addr = ("0.0.0.0", SRC_PORT)
-udp_sock.bind(server_bind_addr)
+client_bind_addr = ("0.0.0.0", SRC_PORT)
+udp_sock.bind(client_bind_addr)
+srv_addr = (arg_res.dst_ip, DST_PORT)
+udp_sock.sendto(struct.pack("c", b"1"), srv_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-# logging.debug(struct.unpack('<c', exch_data))
-udp_sock.sendto(struct.pack("c", b"2"), peer_addr)
 
-# Send metadata
-src_retry_cnt = "{:02x}".format(S_RETRY_CNT)
-src_rnr_retry = "{:02x}".format(S_RNR_RETRY)
-src_max_rd_atomic = "{:02x}".format(S_MAX_RD_ATOMIC)
-src_rnr_timer = "{:02x}".format(S_MIN_RNR_TIMER)
-src_timeout = "{:02x}".format(S_TIMEOUT)
-src_start_psn = "{:08x}".format(S_PSN)
-src_va = "{:016x}".format(POS_IN_MR)
-src_rkey = "{:08x}".format(mr.rkey())
-src_qpn = "{:08x}".format(qp.qpn())
-src_lid = "{:02x}".format(S_LID)
-src_gid = "{0:0>32}".format("ffff" + socket.inet_aton(arg_res.src_ip).hex())
-# server_metadata = (
-#     src_retry_cnt
-#     + src_rnr_retry
-#     + src_max_rd_atomic
-#     + src_rnr_timer
-#     + src_timeout
-#     + src_start_psn
-#     + src_va
-#     + src_rkey
-#     + src_qpn
-#     + src_lid
-#     + src_gid
-# )
-# udp_sock.sendto(bytes.fromhex(server_metadata), peer_addr)
-server_metadata = struct.pack(
-    "!BBBBBIQIIB16s",
-    S_RETRY_CNT,
-    S_RNR_RETRY,
-    S_MAX_RD_ATOMIC,
-    S_MIN_RNR_TIMER,
-    S_TIMEOUT,
-    S_PSN,
-    POS_IN_MR,
-    mr.rkey(),
-    qp.qpn(),
-    S_LID,
-    bytes.fromhex(src_gid),
-)
-udp_sock.sendto(server_metadata, peer_addr)
 # Recive metadata
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
 parsed_fields = struct.unpack("!BBBBBIQIIB16s", exch_data)
@@ -131,38 +92,74 @@ parsed_fields = struct.unpack("!BBBBBIQIIB16s", exch_data)
     dst_lid,
     dst_gid,
 ) = parsed_fields
-# Client should follow server settings
-(
-    src_max_rd_atomic_num,
-    src_rnr_timer_num,
-    src_timeout_num,
-    src_retry_cnt_num,
-    src_rnr_retry_num,
-) = struct.unpack(
-    "!BBBBB",
-    bytes.fromhex(
-        src_max_rd_atomic + src_rnr_timer + src_timeout + src_retry_cnt + src_rnr_retry
-    ),
+logging.debug(f"received server metadata: {parsed_fields}")
+# Send metadata
+src_retry_cnt = "{:02x}".format(C_RETRY_CNT)
+src_rnr_retry = "{:02x}".format(C_RNR_RETRY)
+src_max_rd_atomic = "{:02x}".format(C_MAX_RD_ATOMIC)
+src_rnr_timer = "{:02x}".format(C_MIN_RNR_TIMER)
+src_timeout = "{:02x}".format(C_TIMEOUT)
+src_start_psn = "{:08x}".format(C_PSN)
+src_va = "{:016x}".format(POS_IN_MR)
+src_rkey = "{:08x}".format(mr.rkey())
+src_qpn = "{:08x}".format(qp.qpn())
+src_lid = "{:02x}".format(C_LID)
+src_gid = "{0:0>32}".format("ffff" + socket.inet_aton(arg_res.src_ip).hex())
+# client_metadata = (
+#     src_retry_cnt
+#     + src_rnr_retry
+#     + src_max_rd_atomic
+#     + src_rnr_timer
+#     + src_timeout
+#     + src_start_psn
+#     + src_va
+#     + src_rkey
+#     + src_qpn
+#     + src_lid
+#     + src_gid
+# )
+# udp_sock.sendto(bytes.fromhex(client_metadata), peer_addr)
+client_metadata = struct.pack(
+    "!BBBBBIQIIB16s",
+    C_RETRY_CNT,
+    C_RNR_RETRY,
+    C_MAX_RD_ATOMIC,
+    C_MIN_RNR_TIMER,
+    C_TIMEOUT,
+    C_PSN,
+    POS_IN_MR,
+    mr.rkey(),
+    qp.qpn(),
+    C_LID,
+    bytes.fromhex(src_gid),
 )
+udp_sock.sendto(client_metadata, peer_addr)
+
+# Setup QP, post receive
+sg = SG(pos_in_mr=POS_IN_MR, length=mr.len() - POS_IN_MR, lkey=mr.lkey())
+rr = RecvWR(sgl=sg)
+# Client should follow server settings
 qp.modify_qp(
     qps=QPS.RTR,
     dgid=dst_gid,
     dst_qpn=dst_qpn,  # dqpn should be integer
-    max_dest_rd_atomic=src_max_rd_atomic_num,
-    min_rnr_timer=src_rnr_timer_num,
+    max_dest_rd_atomic=dst_max_rd_atomic,
+    min_rnr_timer=dst_rnr_timer,
     rq_psn=dst_start_psn,
 )
+qp.post_recv(rr)
 
 # Exchange receive ready
 udp_sock.sendto(struct.pack("<i", ReceiveReady), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
+logging.debug(struct.unpack("<i", exch_data))
 
 qp.modify_qp(
     qps=QPS.RTS,
-    sq_psn=S_PSN,
-    timeout=src_timeout_num,
-    retry_cnt=src_retry_cnt_num,
-    rnr_retry=src_rnr_retry_num,
+    sq_psn=C_PSN,
+    timeout=dst_timeout,
+    retry_cnt=dst_retry_cnt,
+    rnr_retry=dst_rnr_retry,
 )
 logging.debug(
     f"qp.dip()={qp.dip()}, qp.rq.min_rnr_timer={qp.min_rnr_timer}, dst_rnr_timer={dst_rnr_timer}"
@@ -178,27 +175,20 @@ case_no += 1
 logging.info(f"Case {case_no} start...")
 
 # Exchange send size
-send_size = MSG_SIZE
-udp_sock.sendto(struct.pack("<iq", SendSize, send_size), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-_ = struct.unpack("<iq", exch_data)
+udp_sock.sendto(struct.pack("<iq", SendSize, -1), peer_addr)
+parsed_fields = struct.unpack("<iq", exch_data)
+_, send_size = parsed_fields
+logging.debug(f"send_size={send_size}")
 
 # RoCE send and ack
-sg = SG(pos_in_mr=POS_IN_MR, length=send_size, lkey=mr.lkey())
-sr = SendWR(
-    opcode=WR_OPCODE.SEND_WITH_IMM,
-    sgl=sg,
-    send_flags=SEND_FLAGS.SIGNALED,
-    imm_data_or_inv_rkey=0x1234,
-)
-qp.post_send(sr)
-qp.process_one_sr()
-roce.recv_pkts(1)
+send_req_pkt_num = Util.compute_wr_pkt_num(send_size, qp.mtu())
+roce.recv_pkts(send_req_pkt_num)
 cqe = qp.poll_cq()
 assert cqe is not None, "cqe should exist"
 assert cqe.local_qpn() == qp.qpn()
 assert cqe.sqpn() == dst_qpn
-assert cqe.len() == sg.len()
+assert cqe.len() == send_size
 assert cqe.op() == WC_OPCODE.SEND
 assert cqe.status() == WC_STATUS.SUCCESS
 
@@ -210,17 +200,31 @@ case_no += 1
 logging.info(f"Case {case_no} start...")
 
 # Exchange read size
-read_size = MSG_SIZE
-udp_sock.sendto(struct.pack("<iq", ReadSize, read_size), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
+udp_sock.sendto(struct.pack("<iq", ReadSize, -1), peer_addr)
 parsed_fields = struct.unpack("<iq", exch_data)
 _, read_size = parsed_fields
+logging.debug(f"parsed_fields={parsed_fields}")
 
 # RoCE read and ack
-mr.write(byte_data=b"00000000abcdefghijklmnopqrstuvwxyz")
-roce.recv_pkts(1)
+sg = SG(pos_in_mr=POS_IN_MR, length=read_size, lkey=mr.lkey())
+sr = SendWR(
+    opcode=WR_OPCODE.RDMA_READ,
+    sgl=sg,
+    rmt_va=dst_va,
+    rkey=dst_rkey,
+)
+qp.post_send(sr)
+read_resp_pkt_num = Util.compute_wr_pkt_num(read_size, qp.mtu())
+qp.process_one_sr()
+roce.recv_pkts(read_resp_pkt_num)
 cqe = qp.poll_cq()
-assert cqe is None, "cqe should not exist"
+assert cqe is not None, "cqe should exist"
+assert cqe.local_qpn() == qp.qpn()
+assert cqe.sqpn() == dst_qpn
+assert cqe.len() == read_size
+assert cqe.op() == WC_OPCODE.RDMA_READ
+assert cqe.status() == WC_STATUS.SUCCESS
 
 ###############################################################################
 # Case 3: client write data to server, normal case
@@ -230,16 +234,31 @@ case_no += 1
 logging.info(f"Case {case_no} start...")
 
 # Exchange write size
-udp_sock.sendto(struct.pack("<iq", WriteSize, -1), peer_addr)
+write_size = MSG_SIZE
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
+udp_sock.sendto(struct.pack("<iq", WriteSize, write_size), peer_addr)
 parsed_fields = struct.unpack("<iq", exch_data)
-_, write_size = parsed_fields
+logging.debug(f"parsed_fields={parsed_fields}")
 
 # RoCE write and ack
-write_req_pkt_num = Util.compute_wr_pkt_num(write_size, qp.mtu())
-roce.recv_pkts(write_req_pkt_num)
+sg = SG(pos_in_mr=POS_IN_MR, length=write_size, lkey=mr.lkey())
+sr = SendWR(
+    opcode=WR_OPCODE.RDMA_WRITE,
+    sgl=sg,
+    rmt_va=dst_va,
+    rkey=dst_rkey,
+    send_flags=SEND_FLAGS.SIGNALED,
+)
+qp.post_send(sr)
+qp.process_one_sr()
+roce.recv_pkts(1)
 cqe = qp.poll_cq()
-assert cqe is None, "cqe should not exist"
+assert cqe is not None, "cqe should exist"
+assert cqe.local_qpn() == qp.qpn()
+assert cqe.sqpn() == dst_qpn
+assert cqe.len() == sg.len()
+assert cqe.op() == WC_OPCODE.RDMA_WRITE
+assert cqe.status() == WC_STATUS.SUCCESS
 
 ###############################################################################
 # Case 4: server write imm with no data to client, normal case
@@ -249,35 +268,28 @@ case_no += 1
 logging.info(f"Case {case_no} start...")
 
 # Exchange write imm
-udp_sock.sendto(struct.pack("<i", WriteImm), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-_ = struct.unpack("<i", exch_data)
+udp_sock.sendto(struct.pack("<i", WriteImm), peer_addr)
+parsed_fields = struct.unpack("<i", exch_data)
+logging.debug(f"parsed_fields={parsed_fields}")
 
 # RoCE write imm and ack
-sg = SG(pos_in_mr=0, length=0, lkey=mr.lkey())
-sr = SendWR(
-    opcode=WR_OPCODE.RDMA_WRITE_WITH_IMM,
-    sgl=sg,
-    # rmt_va = dst_va,
-    # rkey = dst_rkey,
-    send_flags=SEND_FLAGS.SIGNALED,
-    imm_data_or_inv_rkey=0x1234,
-)
-qp.post_send(sr)
-qp.process_one_sr()
+qp.post_recv(rr)
 roce.recv_pkts(1)
 cqe = qp.poll_cq()
 assert cqe is not None, "cqe should exist"
 assert cqe.local_qpn() == qp.qpn()
 assert cqe.sqpn() == dst_qpn
 assert cqe.len() == 0
-assert cqe.op() == WC_OPCODE.RDMA_WRITE
+assert cqe.op() == WC_OPCODE.RECV_RDMA_WITH_IMM
 assert cqe.status() == WC_STATUS.SUCCESS
+assert cqe.imm_data_or_inv_rkey() is not None
 
 # Exchange write done
-udp_sock.sendto(struct.pack("<i", WriteDone), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-_ = struct.unpack("<i", exch_data)
+udp_sock.sendto(struct.pack("<i", WriteDone), peer_addr)
+parsed_fields = struct.unpack("<i", exch_data)
+logging.debug(f"parsed_fields={parsed_fields}")
 
 ###############################################################################
 # Case 5: server write imm with no data to client, normal case
@@ -287,35 +299,18 @@ case_no += 1
 logging.info(f"Case {case_no} start...")
 
 # Exchange atomic ready
-udp_sock.sendto(struct.pack("<i", AtomicReady), peer_addr)
+mr.write(b"\x01\x00\x00\x00\x00\x00\x00\x00", addr=8)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-_ = struct.unpack("<i", exch_data)
+udp_sock.sendto(struct.pack("<i", AtomicReady), peer_addr)
+logging.debug(struct.unpack("<i", exch_data))
 
 # RoCE atomic and ack
-sg = SG(pos_in_mr=POS_IN_MR, length=8, lkey=mr.lkey())
-sr = SendWR(
-    opcode=WR_OPCODE.ATOMIC_CMP_AND_SWP,
-    sgl=sg,
-    rmt_va=dst_va,
-    rkey=dst_rkey,
-    compare_add=0,
-    swap=1,
-)
-qp.post_send(sr)
-qp.process_one_sr()
-# TODO: soft-roce failed to ack atomic operation
 roce.recv_pkts(1)
-cqe = qp.poll_cq()
-assert cqe is not None, "cqe should exist"
-assert cqe.local_qpn() == qp.qpn()
-assert cqe.sqpn() == dst_qpn
-assert cqe.len() == sg.len()
-assert cqe.op() == WC_OPCODE.COMP_SWAP
-assert cqe.status() == WC_STATUS.SUCCESS
+logging.debug(mr.read(addr=0, size=24))
 
 # Exchange atomic done
-udp_sock.sendto(struct.pack("<i", AtomicDone), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
+udp_sock.sendto(struct.pack("<i", AtomicDone), peer_addr)
 logging.debug(struct.unpack("<i", exch_data))
 
 # Save next PSN
@@ -329,20 +324,34 @@ rq_psn = qp.epsn()
 case_no += 1
 logging.info(f"Case {case_no} start...")
 
-# Clear CQ
-cq.clear()
-# Reset QP state
+# Reset QP status
 qp.modify_qp(qps=QPS.RTS, sq_psn=sq_psn, rq_psn=rq_psn)
 # Exchange read size
-udp_sock.sendto(struct.pack("<iq", ReadFailSize, MSG_SIZE), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
+udp_sock.sendto(struct.pack("<iq", ReadFailSize, -1), peer_addr)
 parsed_fields = struct.unpack("<iq", exch_data)
 _, read_size = parsed_fields
+logging.debug(f"parsed_fields={parsed_fields}")
 
 # RoCE read and ack
-roce.recv_pkts(1)
+sg = SG(pos_in_mr=POS_IN_MR, length=read_size, lkey=mr.lkey())
+sr = SendWR(
+    opcode=WR_OPCODE.RDMA_READ,
+    sgl=sg,
+    rmt_va=dst_va,
+    rkey=0xFFFFFFFF,  # Wrong remote key
+)
+qp.post_send(sr)
+read_resp_pkt_num = Util.compute_wr_pkt_num(read_size, qp.mtu())
+qp.process_one_sr()
+roce.recv_pkts(1)  # Receive only 1 NAK packet
 cqe = qp.poll_cq()
-assert cqe is None, "cqe should not exist"
+assert cqe is not None, "cqe should exist"
+assert cqe.local_qpn() == qp.qpn()
+assert cqe.sqpn() == dst_qpn
+assert cqe.len() == read_size
+assert cqe.op() == WC_OPCODE.RDMA_READ
+assert cqe.status() == WC_STATUS.REM_ACCESS_ERR
 assert qp.status() == QPS.ERR
 
 ###############################################################################
@@ -352,65 +361,13 @@ assert qp.status() == QPS.ERR
 case_no += 1
 logging.info(f"Case {case_no} start...")
 
-zero_mr_size = 0
-zero_mr = pd.reg_mr(
-    va=int(S_VA, 16),
-    length=zero_mr_size,
-    access_flags=ACCESS_FLAGS.LOCAL_WRITE
-    | ACCESS_FLAGS.REMOTE_WRITE
-    | ACCESS_FLAGS.REMOTE_READ
-    | ACCESS_FLAGS.REMOTE_ATOMIC
-    | ACCESS_FLAGS.ZERO_BASED,
-)
-assert zero_mr.len() == zero_mr_size
-
-# Clear CQ
-cq.clear()
-# Reset QP state
-qp.modify_qp(qps=QPS.RTS, sq_psn=sq_psn, rq_psn=rq_psn)
-# Post receive
-sg = SG(pos_in_mr=0, length=zero_mr.len(), lkey=zero_mr.lkey())
-rr = RecvWR(sgl=sg)
-qp.post_recv(rr)
-
-# Exchange send size
-exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-udp_sock.sendto(struct.pack("<iq", SendOverSize, -1), peer_addr)
-parsed_fields = struct.unpack("<iq", exch_data)
-_, send_size = parsed_fields
-
-# RoCE send and ack
-assert zero_mr_size < send_size
-send_req_pkt_num = Util.compute_wr_pkt_num(send_size, qp.mtu())
-# Receive the first send request and response NAK invalid request
-roce.recv_pkts(1)
-print(f"send_size={send_size}, send_req_pkt_num={send_req_pkt_num}")
-roce.clear_remaining_pkts(send_req_pkt_num - 1)
-cqe = qp.poll_cq()
-assert cqe is not None, "cqe should exist"
-assert cqe.local_qpn() == qp.qpn()
-assert cqe.sqpn() == dst_qpn
-assert cqe.len() == zero_mr_size
-assert cqe.op() == WC_OPCODE.SEND
-assert cqe.status() == WC_STATUS.REM_INV_REQ_ERR
-assert qp.status() == QPS.ERR
-
-###############################################################################
-# Case 8: server send data to client and exceed the largest RNR retry limit
-###############################################################################
-
-case_no += 1
-logging.info(f"Case {case_no} start...")
-
-# Clear CQ
-cq.clear()
 # Reset QP state
 qp.modify_qp(qps=QPS.RTS, sq_psn=sq_psn, rq_psn=rq_psn)
 # Exchange send size
 send_size = MSG_SIZE
-udp_sock.sendto(struct.pack("<iq", SendRetryRNR, send_size), peer_addr)
+udp_sock.sendto(struct.pack("<iq", SendOverSize, send_size), peer_addr)
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-_ = struct.unpack("<iq", exch_data)
+logging.debug(struct.unpack("<iq", exch_data))
 
 # RoCE send and ack
 sg = SG(pos_in_mr=POS_IN_MR, length=send_size, lkey=mr.lkey())
@@ -422,15 +379,43 @@ sr = SendWR(
 )
 qp.post_send(sr)
 qp.process_one_sr()
-roce.recv_pkts(npkt=qp.rnr_retry)  # Retry 3 times and failed
+roce.recv_pkts(1)
 cqe = qp.poll_cq()
 assert cqe is not None, "cqe should exist"
 assert cqe.local_qpn() == qp.qpn()
 assert cqe.sqpn() == dst_qpn
 assert cqe.len() == sg.len()
 assert cqe.op() == WC_OPCODE.SEND
-assert cqe.status() == WC_STATUS.RNR_RETRY_EXC_ERR
+assert cqe.status() == WC_STATUS.REM_INV_REQ_ERR
 assert qp.status() == QPS.ERR
+
+###############################################################################
+# Case 8: server send data to client and exceed the largest RNR retry limit
+###############################################################################
+
+case_no += 1
+logging.info(f"Case {case_no} start...")
+
+# Reset QP state
+qp.modify_qp(
+    qps=QPS.RTS,
+    sq_psn=sq_psn,
+    rq_psn=rq_psn,
+    min_rnr_timer=0,  # Largest RNR wait timer 655.36ms
+)
+# Exchange send size
+exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
+udp_sock.sendto(struct.pack("<iq", SendRetryRNR, -1), peer_addr)
+parsed_fields = struct.unpack("<iq", exch_data)
+_, send_size = parsed_fields
+logging.debug(struct.unpack("<iq", exch_data))
+
+# RoCE send and RNR NAK
+send_req_pkt_num = Util.compute_wr_pkt_num(send_size, qp.mtu())
+roce.recv_pkts(npkt=qp.rnr_retry * send_req_pkt_num)
+cqe = qp.poll_cq()
+assert cqe is None, "cqe should not exist"
+assert qp.status() == QPS.RTS
 
 ###############################################################################
 # Case 9: client send data to server and exceed the smallest RNR retry limit
@@ -442,34 +427,49 @@ logging.info(f"Case {case_no} start...")
 # Clear CQ
 cq.clear()
 # Reset QP state
-qp.modify_qp(
-    qps=QPS.RTS,
-    sq_psn=sq_psn,
-    rq_psn=rq_psn,
-    min_rnr_timer=1,  # Smallest RNR wait timer 0.01ms
-)
-
+qp.modify_qp(qps=QPS.RTS, sq_psn=sq_psn, rq_psn=rq_psn)
 # Exchange send size
-udp_sock.sendto(struct.pack("<iq", SendRetrySeq, -1), peer_addr)
+send_size = MSG_SIZE
 exch_data, peer_addr = udp_sock.recvfrom(UDP_BUF_SIZE)
-parsed_fields = struct.unpack("<iq", exch_data)
-_, send_size = parsed_fields
+udp_sock.sendto(struct.pack("<iq", SendRetrySeq, send_size), peer_addr)
+logging.debug(struct.unpack("<iq", exch_data))
 
-# RoCE send and RNR NAK
-send_req_pkt_num = Util.compute_wr_pkt_num(send_size, qp.mtu())
+# RoCE send and ack
+sg = SG(pos_in_mr=POS_IN_MR, length=send_size, lkey=mr.lkey())
+sr = SendWR(
+    opcode=WR_OPCODE.SEND_WITH_IMM,
+    sgl=sg,
+    send_flags=SEND_FLAGS.SIGNALED,
+    imm_data_or_inv_rkey=0x1234,
+)
+qp.post_send(sr)
+qp.process_one_sr()
 total_retry_cnt = None
+cqe_err_status = None
 if qp.rnr_retry > qp.retry_cnt:
     # In this case, the retry limit is retry_cnt
     # Total retry count is first normal try + retry_cnt + retry_cnt - 1
     total_retry_cnt = 1 + qp.retry_cnt + qp.retry_cnt - 1
+    cqe_err_status = WC_STATUS.RETRY_EXC_ERR
 else:
     # In this case, the retry limit is rnr_retry
     # Total retry count is first normal try + rnr_retry - 1 + rnr_retry -1
     total_retry_cnt = 1 + qp.rnr_retry - 1 + qp.rnr_retry - 1
-roce.recv_pkts(npkt=total_retry_cnt * send_req_pkt_num)
+    cqe_err_status = WC_STATUS.RNR_RETRY_EXC_ERR
+roce.recv_pkts(npkt=total_retry_cnt)
+# Each retry will incur two NAK, one RNR and one NAK seq error,
+# there are 2 * total_retry_cnt NAK packets responsed by RQ,
+# but SQ will exceed retry limit after received total_retry_cnt NAK packets,
+# so half of NAK packets remaining.
+roce.clear_remaining_pkts(npkt=total_retry_cnt)
 cqe = qp.poll_cq()
-assert cqe is None, "cqe should not exist"
-assert qp.status() == QPS.RTS
+assert cqe is not None, "cqe should exist"
+assert cqe.local_qpn() == qp.qpn()
+assert cqe.sqpn() == dst_qpn
+assert cqe.len() == sg.len()
+assert cqe.op() == WC_OPCODE.SEND
+assert cqe.status() == cqe_err_status
+assert qp.status() == QPS.ERR
 
 
 udp_sock.close()

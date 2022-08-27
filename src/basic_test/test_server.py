@@ -2,6 +2,9 @@ import argparse
 import logging
 import socket
 import struct
+import sys
+
+sys.path.append("..")
 from roce_enum import *
 from roce_v2 import *
 
