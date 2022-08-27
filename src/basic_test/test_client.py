@@ -4,7 +4,9 @@ import math
 import socket
 import struct
 import time
+import sys
 
+sys.path.append("..")
 from roce import AETH, AtomicAckETH, AtomicETH, BTH, ImmDt, RETH
 from roce_enum import RC
 from roce_util import Util

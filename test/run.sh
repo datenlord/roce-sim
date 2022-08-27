@@ -23,17 +23,16 @@ sudo ip addr add $LINK_DEV_IP dev $LINK_DEV_NAME
 sudo ip link set $LINK_DEV_NAME up
 sudo ip route add ${CONTAINER_NET} dev $LINK_DEV_NAME
 
-cd src
+cd src/basic_test
 
 docker kill `docker ps -a -q` || true # Clean all pending containers to release IP
 docker run --rm -d -v `pwd`:`pwd` -w `pwd` --net=mymacvlan --ip=$CONTAINER_SERVER_IP --name exch_server python:3 python3 exch_server.py
 sleep 1 # Wait a while for server to ready
 docker run --rm -v `pwd`:`pwd` -w `pwd` --net=mymacvlan --ip=$CONTAINER_CLIENT_IP --name exch_client python:3 python3 exch_client.py -s $CONTAINER_SERVER_IP
 
-cd ../scapy
-cp ../src/roce*.py .
-cp ../src/sim_*.py .
-cp ../src/test_*.py .
+cd ../../scapy
+cp ../src/basic_test/*.py .
+cp ../src/*.py .
 sleep 1 # Wait a while for docker to release IP
 docker run --rm -d -v `pwd`:`pwd` -w `pwd` --net=mymacvlan --ip=$CONTAINER_SERVER_IP --name test_server python:3 python3 test_server.py -s $CONTAINER_SERVER_IP
 sleep 1 # Wait a while for server to ready
