@@ -740,7 +740,7 @@ class RetryLogic:
                 rnr_retry_num={wr_ctx.rnr_retry_num(req_pkt_psn)}, \
                 other_retry_num={wr_ctx.other_retry_num(req_pkt_psn)}"
         )
-        self.send_q.do_send_pkt(req_pkt)
+        self.send_q.tx_logic.send_ip_pkt(req_pkt)
 
 
 class RespLogic:
@@ -1183,8 +1183,37 @@ class TXLogic:
     def retry_logic(self):
         return self.sq().retry_logic
 
-    def send_req_pkt(self, cssn, send_req, real_send=True):
-        self.sq().send_req_pkt(cssn, send_req, real_send)
+    def send_ip_pkt(self, pkt):
+        if Raw in pkt:
+            pkt = Util.add_padding_if_needed(pkt)
+        l3_pkt = (
+            IP(dst=self.send_q.qp.dip())
+            / UDP(dport=ROCE_PORT, sport=self.send_q.sqpn())
+            / pkt
+        )
+        logging.debug(
+            f"SQ={self.sq().sqpn()} sent to IP={self.sq().qp.dip()} a request: {l3_pkt.show(dump=True)}"
+        )
+        send(l3_pkt)
+
+    def send_req_pkt(self, wr_ssn, req_pkt, real_send=True):
+
+        # We set send hook point here because the RDMA part(transport layer) of package is assembled for routine process,
+        # and then we can change some parts of it here to simulate an error or something else.
+        # We can also control whether the packet is actually sent, and we don't need to change the content of network layer
+        # so we should not put this point in `send_ip_pkt`.
+        if self.send_q.send_hook:
+            wr_ssn, req_pkt, real_send = self.send_q.send_hook(
+                wr_ssn, req_pkt, real_send
+            )
+
+        req_pkt_psn = req_pkt[BTH].psn
+        logging.debug(
+            f"SQ={self.send_q.sqpn()} send request packet with PSN={req_pkt_psn} for WR SSN={wr_ssn}"
+        )
+        self.send_q.retry_logic.add_req_pkt(wr_ssn, req_pkt)
+        if real_send:
+            self.send_ip_pkt(req_pkt)
 
     def process_req(self, real_send=True):
         if not self.sq().busy():
@@ -1613,31 +1642,8 @@ class SQ:
         # All submitted WR in SQ/RD will be completed with flush in error
         self.qp.flush()
 
-    def do_send_pkt(self, pkt):
-        if Raw in pkt:
-            pkt = Util.add_padding_if_needed(pkt)
-        l3_pkt = IP(dst=self.qp.dip()) / UDP(dport=ROCE_PORT, sport=self.sqpn()) / pkt
-        logging.debug(
-            f"SQ={self.sqpn()} sent to IP={self.qp.dip()} a request: {l3_pkt.show(dump=True)}"
-        )
-        send(l3_pkt)
-
-    def send_req_pkt(self, wr_ssn, req_pkt, real_send=True):
-
-        # We set send hook point here because the RDMA part(transport layer) of package is assembled for routine process,
-        # and then we can change some parts of it here to simulate an error or something else.
-        # We can also control whether the packet is actually sent, and we don't need to change the content of network layer
-        # so we should not put this point in `do_send_pkt`.
-        if self.send_hook:
-            wr_ssn, req_pkt, real_send = self.send_hook(wr_ssn, req_pkt, real_send)
-
-        req_pkt_psn = req_pkt[BTH].psn
-        logging.debug(
-            f"SQ={self.sqpn()} send request packet with PSN={req_pkt_psn} for WR SSN={wr_ssn}"
-        )
-        self.retry_logic.add_req_pkt(wr_ssn, req_pkt)
-        if real_send:
-            self.do_send_pkt(req_pkt)
+    def send_req_pkt(self, cssn, send_req, real_send=True):
+        self.tx_logic.send_req_pkt(cssn, send_req, real_send)
 
     def process_req(self, real_send=True):
         self.tx_logic.process_req(real_send)
