@@ -272,6 +272,7 @@ class SanitySide(SideServicer):
             request.cnt,
             retry_handler=retry_handler,
             check_pkt=check_fun,
+            real_recv=request.real_recv,
         )[-1]
         if request.poll_cqe:
             qp.poll_cq()

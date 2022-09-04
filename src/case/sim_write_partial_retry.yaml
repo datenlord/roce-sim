@@ -2,6 +2,7 @@ side_1:
   - name: prepare
   - name: connect_qp
     mtu: 256
+    min_rnr_timer: 0x1f
   - name: local_write
     offset: 0
     content: 'ff'
@@ -14,10 +15,29 @@ side_2:
   - name: prepare
   - name: connect_qp
     mtu: 256
+    min_rnr_timer: 0x1f
   - name: set_hook
     hook_type: resp
     hook_name: sim_write_partial_retry_hook
   - name: barrier
   - name: recv_pkt
     cnt: 4
+  - name: recv_pkt
+    check_pkt:
+      - header: BTH
+        field: opcode
+        expect: RC_WRITE_MIDDLE
+    real_recv: false
+  - name: recv_pkt
+    check_pkt:
+      - header: BTH
+        field: opcode
+        expect: RC_WRITE_MIDDLE
+    real_recv: false
+  - name: recv_pkt
+    check_pkt:
+      - header: BTH
+        field: opcode
+        expect: RC_WRITE_LAST
+    real_recv: false
   - name: barrier
