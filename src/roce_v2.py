@@ -320,7 +320,7 @@ class RoCEv2:
                     for QP={dqpn} from IP={peer_addr}, total {npkt} packets expected"
             )
 
-    def recv_pkts(self, npkt, retry_handler=None, check_pkt=None):
+    def recv_pkts(self, npkt, qpn=None, retry_handler=None, check_pkt=None):
         self.roce_sock.settimeout(self.recv_timeout_secs)
         if npkt == 0:  # TODO: better handle for timeout logic of each QP
             try:
@@ -339,22 +339,32 @@ class RoCEv2:
         else:
             logging.debug(f"expect receiving {npkt} packets")
             opcodes = []
-            for idx in range(npkt):
+            pkt_idx = 0
+            while True:
                 roce_bytes, peer_addr = self.roce_sock.recvfrom(UDP_BUF_SIZE)
                 # TODO: handle non-RoCE packet
                 roce_pkt = BTH(roce_bytes)
-                if check_pkt:
-                    check_pkt(roce_pkt)
                 dqpn = roce_pkt[BTH].dqpn
                 # if roce_pkt[BTH].psn==10008 and roce_pkt[BTH].opcode==RC.SEND_MIDDLE:
                 #     assert False, f'receive from peer={peer_addr} wrong packet={roce_pkt.show(dump=True)}'
                 logging.debug(
-                    f"received packet No. {idx + 1} for QP={dqpn} from IP={peer_addr}, \
+                    f"received packet No. {pkt_idx + 1} for QP={dqpn} from IP={peer_addr}, \
                         total {npkt} packets expected"
                 )
-                # TODO: handle head verification, wrong QPN
+                # Skip unexpected packets and record warnings
+                if qpn != None:
+                    if roce_pkt[BTH].dqpn != qpn:
+                        logging.warn(
+                            f"expected qpn: {qpn}, received pkt's qpn: {roce_pkt[BTH].dqpn}"
+                        )
+                        continue
+                if check_pkt:
+                    check_pkt(roce_pkt)
                 assert dqpn in self.qp_dict, f"wrong QPN={dqpn} in received packet"
                 local_qp = self.qp_dict[dqpn]
                 opcodes.append(local_qp.recv_pkt(roce_pkt, retry_handler))
+                pkt_idx += 1
+                if pkt_idx >= npkt:
+                    break
             logging.debug(f"received {npkt} RoCE packets")
             return opcodes
