@@ -2,6 +2,7 @@ import yaml
 from case import base
 from sys import argv
 from config import Configure
+import logging
 
 try:
     from yaml import CLoader as Loader
@@ -37,6 +38,7 @@ class SanityManager:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
     test_file = argv[1]
     manager = SanityManager(test_file)
     manager.run()
