@@ -26,6 +26,7 @@ class Configure:
     IP: Final = "ip"
     PORT: Final = "port"
     CASES: Final = "test_cases"
+    TEST_ALL: Final = "test_all"
 
     def __init__(self, case):
         self._inner = case
@@ -53,7 +54,19 @@ class Configure:
         return self._connect_sides(Configure.SIDE2)
 
     def cases(self):
-        return self._inner.get(Configure.CASES)
+        all = self._inner.get(Configure.TEST_ALL)
+        if all:
+            import os
+
+            dir = "./case"
+            cases = []
+            for root, dirs, files in os.walk(dir):
+                for file in files:
+                    if file[-5:] == ".yaml":
+                        cases.append(os.path.join(root, file))
+            return cases
+        else:
+            return self._inner.get(Configure.CASES)
 
     def side1(self):
         return Side(self._inner.get(Configure.SIDE1))
