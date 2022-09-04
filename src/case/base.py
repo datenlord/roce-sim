@@ -66,7 +66,11 @@ class TestCase:
         test_def_dir = os.getenv(TestCase.TEST_DEF_DIR_ENV)
         if not test_def_dir:
             test_def_dir = TestCase.DEFAULT_TEST_DEF_DIR
-        test_file_name = "{}/{}.yaml".format(test_def_dir, test_name)
+        if test_name[-5:] == ".yaml":
+            test_file_name = test_name
+        else:
+            test_file_name = "{}/{}.yaml".format(test_def_dir, test_name)
+        logging.info("test_case: {}".format(test_file_name))
         test = None
         try:
             test = yaml.load(open(test_file_name, "r"), Loader=Loader)
@@ -138,8 +142,8 @@ def connect_qp(
     other_stub: SideStub,
 ):
     timeout = c_arg.get("timeout", 14)
-    retry = c_arg.get("retry", 7)
-    rnr_retry = c_arg.get("rnr_retry", 7)
+    retry = c_arg.get("retry", 3)
+    rnr_retry = c_arg.get("rnr_retry", 3)
     qp_flag = c_arg.get("qp_flag", 15)
     mtu = c_arg.get("mtu", 1024)
     sq_start_psn = c_arg.get("sq_start_psn", 0)

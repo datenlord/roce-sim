@@ -12,14 +12,9 @@ side_1:
   dev_name: ""
   ib_port: 1
   gid_idx: 1
+# test all cases in `scr/case/` if `test_all: true`
+test_all: true
+# test specified cases if `test_all: false`
 test_cases:
+  # add specified test cases' names in `src/case/` like `- "read_success"`
   - "read_success"
-  - "write_success"
-  - "send_success"
-  - "send_rnr_retry"
-  - "atomic_cas_success"
-  - "read_psn_error_retry"
-  - "write_imm_success"
-  - "sim_read_partial_retry"
-  - "rxe_write_partial_retry"
-  - "sim_write_partial_retry"
