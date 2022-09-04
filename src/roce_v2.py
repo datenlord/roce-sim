@@ -187,7 +187,7 @@ class QP:
             pkt = self.recv_hook(pkt)
 
         logging.debug(
-            f"QP={self.qpn()} received packet with length={len(pkt)}: "
+            f"QP={self.qpn()} received packet with length={len(pkt)}: \n"
             + pkt.show(dump=True)
         )
         rc_op = pkt[BTH].opcode

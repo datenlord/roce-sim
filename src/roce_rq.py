@@ -874,7 +874,9 @@ class RXLogic:
         # Clear all pending WR, packets
         self.pending_req_ctx_dict.clear()
 
-    def recv_pkts(self, npkt, qpn=None, retry_handler=None, check_pkt=None):
+    def recv_pkts(
+        self, npkt, qpn=None, retry_handler=None, check_pkt=None, real_recv=True
+    ):
         self.roce_socket.settimeout(self.recv_timeout_secs)
         if npkt == 0:  # TODO: better handle for timeout logic of each QP
             try:
@@ -913,7 +915,14 @@ class RXLogic:
                         continue
                 if check_pkt:
                     check_pkt(roce_pkt)
-                opcodes.append(self.recv_q.qp.recv_pkt(roce_pkt, retry_handler))
+                if real_recv:
+                    opcodes.append(self.recv_q.qp.recv_pkt(roce_pkt, retry_handler))
+                else:
+                    logging.debug(
+                        f"bypass QP{qpn}'s processing of packet: \n"
+                        + roce_pkt.show(dump=True)
+                    )
+                    opcodes.append(roce_pkt[BTH].opcode)
                 pkt_idx += 1
             logging.debug(f"received {npkt} RoCE packets")
             return opcodes
@@ -1016,7 +1025,11 @@ class RQ:
     def reg_resp_hook(self, resp_hook):
         self.resp_hook = resp_hook
 
-    def recv_pkts(self, npkt, retry_handler=None, check_pkt=None):
+    def recv_pkts(self, npkt, retry_handler=None, check_pkt=None, real_recv=True):
         return self.rx_logic.recv_pkts(
-            npkt, qpn=self.qp.qp_num, retry_handler=retry_handler, check_pkt=check_pkt
+            npkt,
+            qpn=self.qp.qp_num,
+            retry_handler=retry_handler,
+            check_pkt=check_pkt,
+            real_recv=real_recv,
         )

@@ -154,6 +154,7 @@ message RecvPktRequest {
     oneof check_pkt_option {
         bytes check_pkt = 5;
     }
+    bool real_recv = 6;
 }
 
 message RecvPktResponse {

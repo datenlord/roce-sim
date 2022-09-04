@@ -203,11 +203,14 @@ def recv_pkt(
     retry = c_arg.get("wait_for_retry", 0)
     poll_cqe = c_arg.get("poll_cqe", True)
     cnt = c_arg.get("cnt", 1)
+    real_recv = c_arg.get("real_recv", True)
+
     request = message_pb2.RecvPktRequest(
         wait_for_retry=retry,
         poll_cqe=poll_cqe,
         qp_id=self_info.qp_id,
         cnt=cnt,
+        real_recv=real_recv,
     )
 
     if check_pkt:
