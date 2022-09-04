@@ -267,14 +267,13 @@ class SanitySide(SideServicer):
             if request.wait_for_retry
             else None
         )
-        opcode = GLOBAL_ROCE.recv_pkts(
+        qp = qp_list[request.qp_id]
+        opcode = qp.rq.recv_pkts(
             request.cnt,
-            qpn=qp_list[request.qp_id].qp_num,
             retry_handler=retry_handler,
             check_pkt=check_fun,
         )[-1]
         if request.poll_cqe:
-            qp = qp_list[request.qp_id]
             qp.poll_cq()
         return RecvPktResponse(opcode=opcode, check_pass=pkt_check_result)
 

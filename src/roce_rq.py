@@ -526,7 +526,7 @@ class AtomicReqCtx(ReqCtx):
 
 
 class RXLogic:
-    def __init__(self, rq, rq_psn):
+    def __init__(self, rq, rq_psn, roce_socket, recv_timeout_secs=1):
         self.recv_q = rq
         self.rq_psn = rq_psn % MAX_PSN
 
@@ -540,6 +540,10 @@ class RXLogic:
 
         self.rnr_nak_wait_clear_ts_ns = 0
         self.nak_seq_err_pending = False
+
+        self.roce_socket = roce_socket
+
+        self.recv_timeout_secs = recv_timeout_secs
 
     def modify(self, rq_psn=None):
         if rq_psn is not None:
@@ -870,14 +874,59 @@ class RXLogic:
         # Clear all pending WR, packets
         self.pending_req_ctx_dict.clear()
 
+    def recv_pkts(self, npkt, qpn=None, retry_handler=None, check_pkt=None):
+        self.roce_socket.settimeout(self.recv_timeout_secs)
+        if npkt == 0:  # TODO: better handle for timeout logic of each QP
+            try:
+                roce_bytes, _ = self.roce_socket.recvfrom(UDP_BUF_SIZE)
+                assert (
+                    False
+                ), f"BUG: just wait for timeout and it should not receive any packet"
+            except socket.timeout:
+                logging.info("expect timeout successfully")
+                try:
+                    # Check request timeout and retry if any
+                    self.qp.check_timeout_and_retry()
+                except SQLocalErrException as local_err:
+                    local_err.process_local_err()
+        else:
+            logging.debug(f"expect receiving {npkt} packets")
+            opcodes = []
+            pkt_idx = 0
+            while True:
+                roce_bytes, peer_addr = self.roce_socket.recvfrom(UDP_BUF_SIZE)
+                # TODO: handle non-RoCE packet
+                roce_pkt = BTH(roce_bytes)
+                dqpn = roce_pkt[BTH].dqpn
+                # if roce_pkt[BTH].psn==10008 and roce_pkt[BTH].opcode==RC.SEND_MIDDLE:
+                #     assert False, f'receive from peer={peer_addr} wrong packet={roce_pkt.show(dump=True)}'
+                logging.debug(
+                    f"received packet No. {pkt_idx + 1} for QP={dqpn} from IP={peer_addr}, \
+                        total {npkt} packets expected"
+                )
+                # Skip unexpected packets and record warnings
+                if qpn != None:
+                    if roce_pkt[BTH].dqpn != qpn:
+                        logging.warn(
+                            f"expected qpn: {qpn}, received pkt's qpn: {roce_pkt[BTH].dqpn}"
+                        )
+                        continue
+                if check_pkt:
+                    check_pkt(roce_pkt)
+                opcodes.append(self.recv_q.qp.recv_pkt(roce_pkt, retry_handler))
+                pkt_idx += 1
+                if pkt_idx >= npkt:
+                    break
+            logging.debug(f"received {npkt} RoCE packets")
+            return opcodes
+
 
 class RQ:
-    def __init__(self, qp, cq, rq_psn):
+    def __init__(self, qp, cq, rq_psn, roce_socket):
         self.rq = []
         self.qp = qp
         self.comp_queue = cq
-        self.rx_logic = RXLogic(rq=self, rq_psn=rq_psn)
-
+        self.rx_logic = RXLogic(rq=self, rq_psn=rq_psn, roce_socket=roce_socket)
         self.resp_hook = None
 
     def modify(self, rq_psn=None):
@@ -968,3 +1017,8 @@ class RQ:
 
     def reg_resp_hook(self, resp_hook):
         self.resp_hook = resp_hook
+
+    def recv_pkts(self, npkt, retry_handler=None, check_pkt=None):
+        return self.rx_logic.recv_pkts(
+            npkt, qpn=self.qp.qp_num, retry_handler=retry_handler, check_pkt=check_pkt
+        )
