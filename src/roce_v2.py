@@ -28,6 +28,7 @@ class QP:
         timeout=10,
         retry_cnt=3,
         rnr_retry=3,
+        roce_socket=None,
     ):
         self.pd = pd  # TODO: check pd match for each req
         self.cq = cq
@@ -60,6 +61,7 @@ class QP:
             qp=self,
             cq=cq,
             rq_psn=rq_psn,
+            roce_socket=roce_socket,
         )
         self.pd.add_qp(self)
         self.recv_hook = None
@@ -301,6 +303,7 @@ class RoCEv2:
             access_flags=access_flags,
             pmtu=self.pmtu,
             use_ipv6=self.use_ipv6,
+            roce_socket=self.roce_sock,
         )
         self.qp_dict[qpn] = qp
         return qp
@@ -320,6 +323,7 @@ class RoCEv2:
                     for QP={dqpn} from IP={peer_addr}, total {npkt} packets expected"
             )
 
+    # TODO: replace with sq's `recv_pkts`
     def recv_pkts(self, npkt, qpn=None, retry_handler=None, check_pkt=None):
         self.roce_sock.settimeout(self.recv_timeout_secs)
         if npkt == 0:  # TODO: better handle for timeout logic of each QP
@@ -340,7 +344,7 @@ class RoCEv2:
             logging.debug(f"expect receiving {npkt} packets")
             opcodes = []
             pkt_idx = 0
-            while True:
+            while pkt_idx < npkt:
                 roce_bytes, peer_addr = self.roce_sock.recvfrom(UDP_BUF_SIZE)
                 # TODO: handle non-RoCE packet
                 roce_pkt = BTH(roce_bytes)
@@ -364,7 +368,5 @@ class RoCEv2:
                 local_qp = self.qp_dict[dqpn]
                 opcodes.append(local_qp.recv_pkt(roce_pkt, retry_handler))
                 pkt_idx += 1
-                if pkt_idx >= npkt:
-                    break
             logging.debug(f"received {npkt} RoCE packets")
             return opcodes
