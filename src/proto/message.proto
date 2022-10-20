@@ -133,6 +133,7 @@ message RemoteReadRequest {
     bool real_send = 8;
     uint32 mr_id = 9;
     string dev_name = 10;
+    bool allow_err = 11;
 }
 
 message RemoteReadResponse {
@@ -201,6 +202,7 @@ message RemoteSendRequest {
     uint32 cq_id = 5;
     uint32 mr_id = 6;
     string dev_name = 7;
+    bool allow_err = 8;
 }
 
 message RemoteSendResponse {}
@@ -215,6 +217,7 @@ message RemoteWriteRequest {
     uint32 cq_id = 7;
     uint32 mr_id = 8;
     string dev_name = 9;
+    bool allow_err = 10;
 }
 
 message RemoteWriteResponse {
@@ -230,6 +233,7 @@ message RemoteAtomicCasRequest {
     uint32 qp_id = 7;
     uint32 cq_id = 8;
     string dev_name = 9;
+    bool allow_err = 10;
 }
 
 message RemoteAtomicCasResponse {
@@ -292,6 +296,7 @@ message RemoteWriteImmRequest {
     uint32 send_flag = 9;
     uint32 mr_id = 10;
     string dev_name = 11;
+    bool allow_err = 12;
 }
 
 message RemoteWriteImmResponse {
