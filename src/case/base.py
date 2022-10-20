@@ -4,7 +4,7 @@ from config import Side
 from proto.side_pb2_grpc import SideStub
 from proto import message_pb2
 from typing import Final
-from collections import Mapping
+from collections.abc import Mapping
 import os
 import yaml
 import concurrent.futures
@@ -82,8 +82,8 @@ class TestCase:
         side2_cmd = test.get("side_2")
 
         try:
-            info1, side1_cmd = prepare(side1_cmd, self.side1, self.stub1)
-            info2, side2_cmd = prepare(side2_cmd, self.side2, self.stub2)
+            info1, side1_cmd = prepare(side1_cmd, self.side1, self.stub1, False)
+            info2, side2_cmd = prepare(side2_cmd, self.side2, self.stub2, True)
         except Exception as e:
             logging.error(
                 f"Error when run prepare command for file {test_file_name}, {e}"
@@ -313,6 +313,7 @@ def remote_read(
             qp_id=self_info.qp_id,
             cq_id=self_info.cq_id,
             real_send=real_send,
+            mr_id=self_info.mr_id,
         )
     )
     return True
@@ -340,6 +341,7 @@ def remote_write(
             remote_key=other_info.rkey,
             qp_id=self_info.qp_id,
             cq_id=self_info.cq_id,
+            mr_id=self_info.mr_id,
         )
     )
     return True
@@ -382,6 +384,7 @@ def remote_write_imm(
             qp_id=self_info.qp_id,
             cq_id=self_info.cq_id,
             send_flag=send_flag,
+            mr_id=self_info.mr_id,
         )
     )
     return True
@@ -406,6 +409,7 @@ def remote_send(
             lkey=self_info.lkey,
             qp_id=self_info.qp_id,
             cq_id=self_info.cq_id,
+            mr_id=self_info.mr_id,
         )
     )
     return True
@@ -468,6 +472,7 @@ def local_recv(
             lkey=self_info.lkey,
             qp_id=self_info.qp_id,
             cq_id=self_info.cq_id,
+            mr_id=self_info.mr_id,
         )
     )
     return True
@@ -695,7 +700,7 @@ def process_command(
                     return False
             except Exception as e:
                 logging.error(
-                    f'failed to executed command {c["name"]} for case {test_name}, {e}'
+                    f'failed to executed command {c["name"]} for case {test_name}, exception: {repr(e)}'
                 )
                 return False
         else:
@@ -706,7 +711,7 @@ def process_command(
     return True
 
 
-def prepare(cmds, side: Side, stub: SideStub):
+def prepare(cmds, side: Side, stub: SideStub, is_py_side):
     first_cmd = cmds[0]
     if first_cmd["name"] != "prepare":
         raise RuntimeError(
@@ -718,28 +723,76 @@ def prepare(cmds, side: Side, stub: SideStub):
 
     dev_name = side.dev_name()
     dev_name = dev_name if dev_name else ""
-    response = stub.OpenDevice(message_pb2.OpenDeviceRequest(dev_name=dev_name))
-    dev_name = response.dev_name
-    logging.info(f"device name is {dev_name}")
 
-    response = stub.QueryPort(
-        message_pb2.QueryPortRequest(dev_name=dev_name, ib_port_num=side.ib_port())
-    )
-    lid = response.lid
+    if is_py_side:
+        response = stub.OpenDevice(message_pb2.OpenDeviceRequest(dev_name=dev_name))
+        dev_name = response.dev_name
 
-    response = stub.QueryGid(
-        message_pb2.QueryGidRequest(
-            dev_name=dev_name, ib_port_num=side.ib_port(), gid_idx=side.gid_idx()
+        response = stub.QueryPort(
+            message_pb2.QueryPortRequest(dev_name=dev_name, ib_port_num=side.ib_port())
         )
-    )
+        lid = response.lid
 
-    gid = response.gid_raw
+        response = stub.QueryGid(
+            message_pb2.QueryGidRequest(
+                dev_name=dev_name, ib_port_num=side.ib_port(), gid_idx=side.gid_idx()
+            )
+        )
+        gid = response.gid_raw
 
-    response = stub.CreateCq(message_pb2.CreateCqRequest(dev_name=dev_name, cq_size=10))
-    cq_id = response.cq_id
+        response = stub.CreateCq(
+            message_pb2.CreateCqRequest(dev_name=dev_name, cq_size=10)
+        )
+        cq_id = response.cq_id
 
-    response = stub.CreatePd(message_pb2.CreatePdRequest(dev_name=dev_name))
-    pd_id = response.pd_id
+        response = stub.CreatePd(message_pb2.CreatePdRequest(dev_name=dev_name))
+        pd_id = response.pd_id
+
+        response = stub.CreateQp(
+            message_pb2.CreateQpRequest(pd_id=pd_id, qp_type=0, cq_id=cq_id)
+        )
+        qp_id = response.qp_id
+        qp_num = response.qp_num
+    else:
+        qp_cmd = cmds[1]
+
+        timeout = qp_cmd.get("timeout", 14)
+        retry = qp_cmd.get("retry", 3)
+        rnr_retry = qp_cmd.get("rnr_retry", 3)
+        qp_flag = qp_cmd.get("qp_flag", 15)
+        mtu = qp_cmd.get("mtu", 1024)
+        sq_start_psn = qp_cmd.get("sq_start_psn", 0)
+        rq_start_psn = qp_cmd.get("rq_start_psn", 0)
+        max_rd_atomic = qp_cmd.get("max_rd_atomic", 2)
+        max_dest_rd_atomic = qp_cmd.get("max_dest_rd_atomic", 2)
+        min_rnr_timer = qp_cmd.get("min_rnr_timer", 0x12)
+
+        response = stub.OpenDevice(
+            message_pb2.OpenDeviceRequest(
+                dev_name=dev_name,
+                access_flag=qp_flag,
+                gid_idx=side.gid_idx(),
+                ib_port_num=side.ib_port(),
+                timeout=timeout,
+                retry=retry,
+                rnr_retry=rnr_retry,
+                mtu=mtu,
+                sq_start_psn=sq_start_psn,
+                rq_start_psn=rq_start_psn,
+                max_rd_atomic=max_rd_atomic,
+                max_dest_rd_atomic=max_dest_rd_atomic,
+                min_rnr_timer=min_rnr_timer,
+            )
+        )
+        dev_name = response.dev_name
+        qp_num = response.qp_num
+        lid = response.lid
+        gid = response.gid_raw
+        cq_id = 0
+        pd_id = 0
+        qp_id = 0
+
+    logging.info(f"device name is {dev_name}")
 
     response = stub.CreateMr(
         message_pb2.CreateMrRequest(pd_id=pd_id, len=mr_len, flag=mr_flag)
@@ -749,12 +802,6 @@ def prepare(cmds, side: Side, stub: SideStub):
     rkey = response.rkey
     lkey = response.lkey
     mr_id = response.mr_id
-
-    response: message_pb2.CreateQpResponse = stub.CreateQp(
-        message_pb2.CreateQpRequest(pd_id=pd_id, qp_type=0, cq_id=cq_id)
-    )
-    qp_id = response.qp_id
-    qp_num = response.qp_num
 
     return (
         SideInfo(

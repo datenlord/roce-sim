@@ -8,10 +8,25 @@ message VersionResponse{
 
 message OpenDeviceRequest {
     string dev_name = 1;
+    uint64 access_flag = 2;
+    uint32 gid_idx = 3;
+    uint32 ib_port_num = 4;
+    uint32 timeout = 5;
+    uint32 retry = 6;
+    uint32 rnr_retry = 7;
+    uint32 mtu = 8;
+    uint32 sq_start_psn = 9;
+    uint32 rq_start_psn = 10;
+    uint32 max_rd_atomic = 11;
+    uint32 max_dest_rd_atomic = 12;
+    uint32 min_rnr_timer = 13;   
 }
 
 message OpenDeviceResponce {
     string dev_name = 1;
+    uint32 qp_num = 2;
+    uint32 lid = 3;
+    bytes gid_raw = 4;
 }
 
 message CreatePdRequest {
@@ -26,6 +41,7 @@ message CreateMrRequest {
     uint32 pd_id = 1;
     uint64 flag = 2;
     uint64 len = 3;
+    string dev_name = 4;
 }
 
 message CreateMrResponse {
@@ -115,6 +131,8 @@ message RemoteReadRequest {
     uint32 qp_id = 6;
     uint32 cq_id = 7;
     bool real_send = 8;
+    uint32 mr_id = 9;
+    string dev_name = 10;
 }
 
 message RemoteReadResponse {
@@ -125,6 +143,7 @@ message LocalWriteRequest {
     uint32 offset = 2;
     uint32 len = 3;
     bytes content = 4;
+    string dev_name = 5;
 }
 
 message LocalWriteResponse {
@@ -168,6 +187,8 @@ message LocalRecvRequest {
     uint32 lkey = 3;
     uint32 qp_id = 6;
     uint32 cq_id = 7;
+    uint32 mr_id = 8;
+    string dev_name = 9;
 }
 
 message LocalRecvResponse {}
@@ -176,8 +197,10 @@ message RemoteSendRequest {
     uint64 addr = 1;
     uint32 len = 2;
     uint32 lkey = 3;
-    uint32 qp_id = 6;
-    uint32 cq_id = 7;
+    uint32 qp_id = 4;
+    uint32 cq_id = 5;
+    uint32 mr_id = 6;
+    string dev_name = 7;
 }
 
 message RemoteSendResponse {}
@@ -190,6 +213,8 @@ message RemoteWriteRequest {
     uint32 remote_key = 5;
     uint32 qp_id = 6;
     uint32 cq_id = 7;
+    uint32 mr_id = 8;
+    string dev_name = 9;
 }
 
 message RemoteWriteResponse {
@@ -204,6 +229,7 @@ message RemoteAtomicCasRequest {
     uint64 new_value = 6;
     uint32 qp_id = 7;
     uint32 cq_id = 8;
+    string dev_name = 9;
 }
 
 message RemoteAtomicCasResponse {
@@ -238,7 +264,8 @@ message PollCompleteResponse {
 
 message CheckQpStatusRequest {
     uint32 status = 1;
-    uint32 qp_id = 2;
+    string dev_name = 2;
+    uint32 qp_id = 3;
 }
 
 message CheckQpStatusResponse {
@@ -263,6 +290,8 @@ message RemoteWriteImmRequest {
     uint32 qp_id = 7;
     uint32 cq_id = 8;
     uint32 send_flag = 9;
+    uint32 mr_id = 10;
+    string dev_name = 11;
 }
 
 message RemoteWriteImmResponse {
