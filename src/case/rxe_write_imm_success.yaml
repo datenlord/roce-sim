@@ -1,0 +1,29 @@
+side_1:
+  - name: prepare
+  - name: connect_qp
+  - name: local_write
+    offset: 0
+    content: 'ff'
+  - name: barrier
+  - name: remote_write_imm
+    len: 1
+    imm: 0x1234
+
+side_2:
+  - name: prepare
+  - name: connect_qp
+  - name: local_recv
+  - name: barrier
+  - name: recv_pkt
+    check_pkt:
+      - header: BTH
+        field: opcode
+        expect: RC_RDMA_WRITE_ONLY_WITH_IMMEDIATE
+    check_pkt:
+      - header: RETHImmdt
+        field: data
+        expect: 0x34120000
+  - name: local_check
+    seg: 
+      - offset: 0
+        expected: 'ff'
