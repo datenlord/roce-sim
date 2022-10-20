@@ -224,10 +224,9 @@ impl Side for SideImpl {
             .unwrap();
         let rmr = RemoteMr::new(token);
 
-        // TODO: error check
         rdma.read(&mut lmr, &rmr)
             .await
-            .unwrap_or_else(|e| debug!("error msg: {}", e));
+            .unwrap_or_else(|e| error_check(req.get_allow_err(), e));
 
         let resp = RemoteReadResponse::default();
         let f = sink.success(resp).map_err(|_| {}).map(|_| ());
@@ -259,10 +258,10 @@ impl Side for SideImpl {
             .build()
             .unwrap();
         let mut rmr = RemoteMr::new(token);
-        // TODO: error check
+
         rdma.write(&lmr, &mut rmr)
             .await
-            .unwrap_or_else(|e| debug!("error msg: {}", e));
+            .unwrap_or_else(|e| error_check(req.get_allow_err(), e));
 
         let resp = RemoteWriteResponse::default();
         let f = sink.success(resp).map_err(|_| {}).map(|_| ());
@@ -280,7 +279,7 @@ impl Side for SideImpl {
         let rdma = rdma_map.get(req.get_dev_name()).unwrap();
 
         let token = MrTokenBuilder::default()
-            .addr(req.get_addr().try_into().unwrap())
+            .addr(req.get_remote_addr().try_into().unwrap())
             .len(8)
             .rkey(req.get_remote_key())
             .build()
@@ -290,7 +289,7 @@ impl Side for SideImpl {
 
         rdma.atomic_cas(req.old_value, req.new_value, &mut rmr)
             .await
-            .unwrap();
+            .unwrap_or_else(|e| error_check(req.get_allow_err(), e));
 
         let resp = RemoteAtomicCasResponse::default();
         let f = sink.success(resp).map_err(|_| {}).map(|_| ());
@@ -320,7 +319,7 @@ impl Side for SideImpl {
             let mr_id: usize = req.get_mr_id().cast();
             let mut lmr_map = MR_MAP.write().await;
             let lmr = lmr_map.get_mut(mr_id).unwrap();
-            debug!("recv mr id {mr_id}");
+
             // TODO: add uer defined lmr api for async-rdma
             let _len = lmr.as_mut_slice().write(*recv_lmr.as_slice()).unwrap();
         });
@@ -362,7 +361,9 @@ impl Side for SideImpl {
             .get_mut(0..req.get_len().cast())
             .unwrap();
 
-        rdma.send_raw(&lmr).await.unwrap();
+        rdma.send_raw(&lmr)
+            .await
+            .unwrap_or_else(|e| error_check(req.get_allow_err(), e));
 
         let resp = RemoteSendResponse::default();
         let f = sink.success(resp).map_err(|_| {}).map(|_| ());
@@ -540,7 +541,7 @@ impl Side for SideImpl {
             .unwrap();
 
         let token = MrTokenBuilder::default()
-            .addr(req.get_addr().try_into().unwrap())
+            .addr(req.get_remote_addr().try_into().unwrap())
             .len(req.get_len().try_into().unwrap())
             .rkey(req.get_remote_key())
             .build()
@@ -549,7 +550,7 @@ impl Side for SideImpl {
         let mut rmr = RemoteMr::new(token);
         rdma.write_with_imm(&lmr, &mut rmr, req.get_imm_data())
             .await
-            .unwrap();
+            .unwrap_or_else(|e| error_check(req.get_allow_err(), e));
 
         let resp = RemoteWriteImmResponse::default();
         let f = sink.success(resp).map_err(|_| {}).map(|_| ());
@@ -615,5 +616,13 @@ impl Side for SideImpl {
     ) {
         // too low level for rust side, not impl yet
         grpcio::unimplemented_call!(ctx, sink)
+    }
+}
+
+fn error_check(allow_err: bool, error: io::Error) {
+    if allow_err {
+        debug!("allowed error: {:?}", error)
+    } else {
+        panic!("{:?}", error);
     }
 }

@@ -302,6 +302,7 @@ def remote_read(
     remote_offset = c_arg.get("remote_offset", 0)
     len = c_arg.get("len", 0)
     real_send = c_arg.get("real_send", True)
+    allow_err = c_arg.get("allow_err", False)
 
     self_stub.RemoteRead(
         message_pb2.RemoteReadRequest(
@@ -314,6 +315,7 @@ def remote_read(
             cq_id=self_info.cq_id,
             real_send=real_send,
             mr_id=self_info.mr_id,
+            allow_err=allow_err,
         )
     )
     return True
@@ -331,6 +333,7 @@ def remote_write(
     local_offset = c_arg.get("local_offset", 0)
     remote_offset = c_arg.get("remote_offset", 0)
     len = c_arg.get("len", 0)
+    allow_err = c_arg.get("allow_err", False)
 
     self_stub.RemoteWrite(
         message_pb2.RemoteWriteRequest(
@@ -342,6 +345,7 @@ def remote_write(
             qp_id=self_info.qp_id,
             cq_id=self_info.cq_id,
             mr_id=self_info.mr_id,
+            allow_err=allow_err,
         )
     )
     return True
@@ -361,6 +365,7 @@ def remote_write_imm(
     len = c_arg.get("len", 0)
     imm = c_arg.get("imm", 0x1234)
     send_flag = c_arg.get("send_flag", 2)
+    allow_err = c_arg.get("allow_err", False)
 
     if isinstance(send_flag, str):
         if send_flag == "SIGNALED":
@@ -385,6 +390,7 @@ def remote_write_imm(
             cq_id=self_info.cq_id,
             send_flag=send_flag,
             mr_id=self_info.mr_id,
+            allow_err=allow_err,
         )
     )
     return True
@@ -401,6 +407,7 @@ def remote_send(
 ):
     offset = c_arg.get("offset", 0)
     len = c_arg.get("len", 0)
+    allow_err = c_arg.get("allow_err", False)
 
     self_stub.RemoteSend(
         message_pb2.RemoteSendRequest(
@@ -410,6 +417,7 @@ def remote_send(
             qp_id=self_info.qp_id,
             cq_id=self_info.cq_id,
             mr_id=self_info.mr_id,
+            allow_err=allow_err,
         )
     )
     return True
@@ -428,6 +436,7 @@ def remote_atomic_cas(
     remote_offset = c_arg.get("remote_offset", 0)
     old_value = c_arg.get("old_value")
     new_value = c_arg.get("new_value")
+    allow_err = c_arg.get("allow_err", False)
 
     if not old_value:
         logging.error("old_value should be set")
@@ -447,6 +456,7 @@ def remote_atomic_cas(
             new_value=new_value,
             qp_id=self_info.qp_id,
             cq_id=self_info.cq_id,
+            allow_err=allow_err,
         )
     )
 
