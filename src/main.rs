@@ -40,10 +40,10 @@
     clippy::panic_in_result_fn, // allow debug_assert
 )]
 
+use clippy_utilities::Cast;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::io::prelude::*;
 use std::net::{TcpListener, TcpStream, UdpSocket};
-use utilities::Cast;
 
 // ///
 // const MSG: &str = "SEND operation";
