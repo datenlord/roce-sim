@@ -8,6 +8,7 @@ side_1:
     content: 'ff'
   - name: barrier
   - name: remote_write
+    allow_err: true
     len: 1024
   - name: barrier
 
