@@ -22,6 +22,7 @@ use proto::message::{
 use proto::side_grpc::{self, Side};
 use rdma_sys::ibv_mtu;
 use std::alloc::Layout;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::io::Write;
@@ -63,8 +64,10 @@ fn main() -> anyhow::Result<()> {
 
 lazy_static! {
     static ref RDMA_MAP: Arc<RwLock<HashMap<String, Rdma>>> = Arc::new(RwLock::new(HashMap::new()));
-    static ref MR_MAP: Arc<RwLock<Vec<LocalMr>>> = Arc::new(RwLock::new(vec![]));
+    static ref MR_MAP: Arc<RwLock<HashMap<usize, LocalMr>>> = Arc::new(RwLock::new(HashMap::new()));
     static ref RUNTIME: runtime::Runtime = runtime::Runtime::new().unwrap();
+    static ref RDMA_MR_MAP: Arc<RwLock<HashMap<String, Vec<usize>>>> =
+        Arc::new(RwLock::new(HashMap::new()));
 }
 
 fn try_mtu_from_u32(value: u32) -> Result<MTU, io::Error> {
@@ -134,7 +137,17 @@ impl Side for SideImpl {
             resp.set_lid((*ep.lid()).cast());
             resp.set_gid_raw((*ep.gid()).as_raw().to_vec());
 
-            RDMA_MAP.write().await.insert(dev_name, rdma);
+            let old_rdma = RDMA_MAP.write().await.insert(dev_name.clone(), rdma);
+            // clean up old lmrs
+            if old_rdma.is_some() {
+                let lmrs = RDMA_MR_MAP.write().await.remove(&dev_name).unwrap();
+                let mut lmr_map = MR_MAP.write().await;
+                for mr in lmrs {
+                    let mr = lmr_map.remove(&mr);
+                    debug!("drop mr :{:?}", mr);
+                }
+            }
+
             resp
         });
 
@@ -149,8 +162,9 @@ impl Side for SideImpl {
         req: proto::message::CreateMrRequest,
         sink: grpcio::UnarySink<proto::message::CreateMrResponse>,
     ) {
+        let dev_name = req.get_dev_name();
         let rdma_map = RDMA_MAP.read().await;
-        let rdma = rdma_map.get(req.get_dev_name()).unwrap();
+        let rdma = rdma_map.get(dev_name).unwrap();
 
         let mr = rdma
             .alloc_local_mr_with_access(
@@ -166,9 +180,21 @@ impl Side for SideImpl {
         resp.set_lkey(mr.lkey());
 
         let mut local_mr_map = MR_MAP.write().await;
-        local_mr_map.push(mr);
+        let mr_id = local_mr_map.len();
+        local_mr_map.insert(mr_id, mr);
 
-        resp.set_mr_id((local_mr_map.len() - 1).cast());
+        // insert mr_id and related rdma into the map
+        match RDMA_MR_MAP.write().await.entry(dev_name.to_string()) {
+            Entry::Occupied(mut occ) => {
+                let mr_ids = occ.get_mut();
+                mr_ids.push(mr_id);
+            }
+            Entry::Vacant(vac) => {
+                let _ = vac.insert(vec![mr_id]);
+            }
+        };
+
+        resp.set_mr_id(mr_id.cast());
 
         let f = sink.success(resp).map_err(|_| {}).map(|_| ());
         ctx.spawn(f);
@@ -211,7 +237,7 @@ impl Side for SideImpl {
         let mut lmr_map = MR_MAP.write().await;
         let mr_id: usize = req.get_mr_id().cast();
         let mut lmr = lmr_map
-            .get_mut(mr_id)
+            .get_mut(&mr_id)
             .unwrap()
             .get_mut(0..req.get_len().cast())
             .unwrap();
@@ -246,7 +272,7 @@ impl Side for SideImpl {
         let mr_id: usize = req.get_mr_id().cast();
         let lmr_map = MR_MAP.write().await;
         let lmr = lmr_map
-            .get(mr_id)
+            .get(&mr_id)
             .unwrap()
             .get(0..req.get_len().cast())
             .unwrap();
@@ -318,7 +344,7 @@ impl Side for SideImpl {
 
             let mr_id: usize = req.get_mr_id().cast();
             let mut lmr_map = MR_MAP.write().await;
-            let lmr = lmr_map.get_mut(mr_id).unwrap();
+            let lmr = lmr_map.get_mut(&mr_id).unwrap();
 
             // TODO: add uer defined lmr api for async-rdma
             let _len = lmr.as_mut_slice().write(*recv_lmr.as_slice()).unwrap();
@@ -356,7 +382,7 @@ impl Side for SideImpl {
         let mut lmr_map = MR_MAP.write().await;
         let mr_id: usize = req.get_mr_id().cast();
         let lmr = lmr_map
-            .get_mut(mr_id)
+            .get_mut(&mr_id)
             .unwrap()
             .get_mut(0..req.get_len().cast())
             .unwrap();
@@ -439,7 +465,7 @@ impl Side for SideImpl {
     ) {
         let mut lmr_map = MR_MAP.write().await;
         let mr_id: usize = req.get_mr_id().cast();
-        let lmr = lmr_map.get_mut(mr_id).unwrap();
+        let lmr = lmr_map.get_mut(&mr_id).unwrap();
 
         let offset: usize = req.get_offset().cast();
         let len: usize = req.get_len().cast();
@@ -488,7 +514,7 @@ impl Side for SideImpl {
     ) {
         let lmr_map = MR_MAP.read().await;
         let mr_id: usize = req.get_mr_id().cast();
-        let lmr = lmr_map.get(mr_id).unwrap();
+        let lmr = lmr_map.get(&mr_id).unwrap();
 
         let offset = req.get_offset();
         let expected = req.get_expected();
@@ -535,7 +561,7 @@ impl Side for SideImpl {
         let mut lmr_map = MR_MAP.write().await;
         let mr_id: usize = req.get_mr_id().cast();
         let lmr = lmr_map
-            .get_mut(mr_id)
+            .get_mut(&mr_id)
             .unwrap()
             .get_mut(0..req.get_len().cast())
             .unwrap();
