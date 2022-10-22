@@ -316,6 +316,7 @@ def remote_read(
             real_send=real_send,
             mr_id=self_info.mr_id,
             allow_err=allow_err,
+            dev_name=self_info.dev_name,
         )
     )
     return True
@@ -346,6 +347,7 @@ def remote_write(
             cq_id=self_info.cq_id,
             mr_id=self_info.mr_id,
             allow_err=allow_err,
+            dev_name=self_info.dev_name,
         )
     )
     return True
@@ -391,6 +393,7 @@ def remote_write_imm(
             send_flag=send_flag,
             mr_id=self_info.mr_id,
             allow_err=allow_err,
+            dev_name=self_info.dev_name,
         )
     )
     return True
@@ -418,6 +421,7 @@ def remote_send(
             cq_id=self_info.cq_id,
             mr_id=self_info.mr_id,
             allow_err=allow_err,
+            dev_name=self_info.dev_name,
         )
     )
     return True
@@ -457,6 +461,7 @@ def remote_atomic_cas(
             qp_id=self_info.qp_id,
             cq_id=self_info.cq_id,
             allow_err=allow_err,
+            dev_name=self_info.dev_name,
         )
     )
 
@@ -483,6 +488,7 @@ def local_recv(
             qp_id=self_info.qp_id,
             cq_id=self_info.cq_id,
             mr_id=self_info.mr_id,
+            dev_name=self_info.dev_name,
         )
     )
     return True
@@ -589,7 +595,9 @@ def check_qp_status(
             return False
 
     response = self_stub.CheckQpStatus(
-        message_pb2.CheckQpStatusRequest(status=status, qp_id=self_info.qp_id)
+        message_pb2.CheckQpStatusRequest(
+            status=status, qp_id=self_info.qp_id, dev_name=self_info.dev_name
+        )
     )
     return response.same
 
@@ -805,7 +813,9 @@ def prepare(cmds, side: Side, stub: SideStub, is_py_side):
     logging.info(f"device name is {dev_name}")
 
     response = stub.CreateMr(
-        message_pb2.CreateMrRequest(pd_id=pd_id, len=mr_len, flag=mr_flag)
+        message_pb2.CreateMrRequest(
+            pd_id=pd_id, len=mr_len, flag=mr_flag, dev_name=dev_name
+        )
     )
     addr = response.addr
     len = response.len

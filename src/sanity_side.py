@@ -71,7 +71,7 @@ class SanitySide(SideServicer):
 
     def OpenDevice(self, request, context):
         logging.debug("request device name is {}".format(request.dev_name))
-        return OpenDeviceResponce(dev_name="dev_name")
+        return OpenDeviceResponce(dev_name="sim")
 
     def CreatePd(self, request, context):
         pd = GLOBAL_ROCE.alloc_pd()
