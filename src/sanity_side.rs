@@ -267,7 +267,7 @@ impl Side for SideImpl {
         sink: grpcio::UnarySink<proto::message::RemoteWriteResponse>,
     ) {
         let rdma_map = RDMA_MAP.read().await;
-        let rdma = rdma_map.get("").unwrap();
+        let rdma = rdma_map.get(req.get_dev_name()).unwrap();
 
         let mr_id: usize = req.get_mr_id().cast();
         let lmr_map = MR_MAP.write().await;
@@ -424,11 +424,11 @@ impl Side for SideImpl {
     async fn query_port(
         &mut self,
         ctx: grpcio::RpcContext,
-        _req: proto::message::QueryPortRequest,
+        req: proto::message::QueryPortRequest,
         sink: grpcio::UnarySink<proto::message::QueryPortResponse>,
     ) {
         let rdma_map = RDMA_MAP.read().await;
-        let rdma = rdma_map.get("").unwrap();
+        let rdma = rdma_map.get(req.get_dev_name()).unwrap();
 
         let lid = *rdma.get_qp_endpoint().lid();
 
@@ -442,11 +442,11 @@ impl Side for SideImpl {
     async fn query_gid(
         &mut self,
         ctx: grpcio::RpcContext,
-        _req: proto::message::QueryGidRequest,
+        req: proto::message::QueryGidRequest,
         sink: grpcio::UnarySink<proto::message::QueryGidResponse>,
     ) {
         let rdma_map = RDMA_MAP.read().await;
-        let rdma = rdma_map.get("").unwrap();
+        let rdma = rdma_map.get(req.get_dev_name()).unwrap();
 
         let ep = rdma.get_qp_endpoint();
 
@@ -556,7 +556,7 @@ impl Side for SideImpl {
         sink: grpcio::UnarySink<proto::message::RemoteWriteImmResponse>,
     ) {
         let rdma_map = RDMA_MAP.read().await;
-        let rdma = rdma_map.get("").unwrap();
+        let rdma = rdma_map.get(req.get_dev_name()).unwrap();
 
         let mut lmr_map = MR_MAP.write().await;
         let mr_id: usize = req.get_mr_id().cast();
