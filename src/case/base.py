@@ -479,6 +479,7 @@ def local_recv(
 ):
     offset = c_arg.get("offset", 0)
     len = c_arg.get("len", 0)
+    imm = c_arg.get("imm", 0)
 
     self_stub.LocalRecv(
         message_pb2.LocalRecvRequest(
@@ -489,6 +490,7 @@ def local_recv(
             cq_id=self_info.cq_id,
             mr_id=self_info.mr_id,
             dev_name=self_info.dev_name,
+            imm=imm,
         )
     )
     return True
@@ -739,8 +741,8 @@ def prepare(cmds, side: Side, stub: SideStub, is_py_side):
     mr_len = first_cmd.get("mr_len", 1024)
     mr_flag = first_cmd.get("mr_flag", 15)
 
-    dev_name = side.dev_name()
-    dev_name = dev_name if dev_name else ""
+    dev_name = side.dev_name() if side.dev_name() else ""
+    imm_flag = side.imm_flag() if side.imm_flag() else 3
 
     if is_py_side:
         response = stub.OpenDevice(message_pb2.OpenDeviceRequest(dev_name=dev_name))
@@ -800,6 +802,7 @@ def prepare(cmds, side: Side, stub: SideStub, is_py_side):
                 max_rd_atomic=max_rd_atomic,
                 max_dest_rd_atomic=max_dest_rd_atomic,
                 min_rnr_timer=min_rnr_timer,
+                imm_flag=imm_flag,
             )
         )
         dev_name = response.dev_name

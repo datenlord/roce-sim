@@ -12,6 +12,8 @@ side_1:
   dev_name: ""
   ib_port: 1
   gid_idx: 1
+  # 3 for soft-roce(as default), 2 for hardware devices.
+  imm_flag: 3
 # test all cases in `scr/case/` if `test_all: true`
 test_all: true
 # test specified cases if `test_all: false`

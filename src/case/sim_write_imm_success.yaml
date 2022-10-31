@@ -1,17 +1,16 @@
 side_1:
   - name: prepare
   - name: connect_qp
-  - name: notify_cq
-    solicited_only: true
   - name: local_recv
     offset: 0
     len: 0
+    imm: 0x34120000
   - name: barrier
-  - name: poll_complete
-    len: 0
-    opcode: RECV_RDMA_WITH_IMM
-    imm_data_or_inv_rkey: 0x34120000
-    status: SUCCESS
+  - name: barrier
+  - name: local_check
+    seg: 
+      - offset: 0
+        expected: 'ff'
 
 side_2:
   - name: prepare
@@ -19,14 +18,15 @@ side_2:
   - name: local_write
     offset: 0
     content: 'ff'
-  - name: barrier
   - name: remote_write_imm
-    len: 0
+    len: 1
     send_flag: 6
     imm: 0x1234
+  - name: barrier
   - name: recv_pkt
     poll_cqe: false
   - name: poll_complete
     len: 0
     opcode: RDMA_WRITE
     status: SUCCESS
+  - name: barrier

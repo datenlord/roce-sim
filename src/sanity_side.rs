@@ -33,6 +33,9 @@ use std::time::Duration;
 use std::{env, io};
 use tokio::{runtime, sync::RwLock};
 
+/// If imm flag was initialized.
+static mut INIT_IMM_FLAG: parking_lot::Mutex<bool> = parking_lot::Mutex::new(false);
+
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
     let env = Arc::new(Environment::new(1));
@@ -125,9 +128,23 @@ impl Side for SideImpl {
                 .set_rq_psn(req.get_rq_start_psn())
                 .set_max_rd_atomic(req.get_max_rd_atomic().cast())
                 .set_max_dest_rd_atomic(req.get_max_dest_rd_atomic().cast())
-                .set_min_rnr_timer(req.get_min_rnr_timer().cast())
-                .build()
-                .unwrap();
+                .set_min_rnr_timer(req.get_min_rnr_timer().cast());
+
+            let mut guard = unsafe { INIT_IMM_FLAG.lock() };
+            let rdma = if *guard {
+                rdma
+            } else {
+                *guard = true;
+                rdma.set_imm_flag_in_wc(req.get_imm_flag()).unwrap()
+            };
+
+            let rdma = if req.get_dev_name().is_empty() {
+                rdma
+            } else {
+                rdma.set_dev(req.get_dev_name())
+            }
+            .build()
+            .unwrap();
 
             let ep = rdma.get_qp_endpoint();
 
@@ -334,8 +351,8 @@ impl Side for SideImpl {
             let rdma_map = RDMA_MAP.read().await;
             let rdma = rdma_map.get(req.get_dev_name()).unwrap();
 
-            let recv_lmr = rdma
-                .receive_raw_fn(
+            let (recv_lmr, imm) = rdma
+                .receive_raw_with_imm_fn(
                     Layout::from_size_align(req.get_len().cast(), 1).unwrap(),
                     || tx.send(()).unwrap(),
                 )
@@ -348,6 +365,11 @@ impl Side for SideImpl {
 
             // TODO: add uer defined lmr api for async-rdma
             let _len = lmr.as_mut_slice().write(*recv_lmr.as_slice()).unwrap();
+
+            // check imm data
+            if req.get_imm() != 0 {
+                assert_eq!(imm.unwrap(), req.get_imm())
+            }
         });
         rx.await.unwrap();
         let resp = LocalRecvResponse::default();
