@@ -19,7 +19,8 @@ message OpenDeviceRequest {
     uint32 rq_start_psn = 10;
     uint32 max_rd_atomic = 11;
     uint32 max_dest_rd_atomic = 12;
-    uint32 min_rnr_timer = 13;   
+    uint32 min_rnr_timer = 13;
+    uint32 imm_flag = 14;
 }
 
 message OpenDeviceResponce {
@@ -190,6 +191,7 @@ message LocalRecvRequest {
     uint32 cq_id = 7;
     uint32 mr_id = 8;
     string dev_name = 9;
+    uint32 imm = 10;
 }
 
 message LocalRecvResponse {}

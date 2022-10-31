@@ -86,6 +86,7 @@ class Side:
     DEV_NAME: Final = "dev_name"
     IB_PORT: Final = "ib_port"
     GID_IDX: Final = "gid_idx"
+    IMM_FLAG: Final = "imm_flag"
 
     def __init__(self, side):
         self._inner = side
@@ -98,3 +99,6 @@ class Side:
 
     def gid_idx(self):
         return self._inner.get(Side.GID_IDX)
+
+    def imm_flag(self):
+        return self._inner.get(Side.IMM_FLAG)
