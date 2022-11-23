@@ -1,0 +1,25 @@
+# No ACK response from responder within timer interval. 
+# Requester retry the request until the limit is exceeded.
+
+side_1: 
+  - name: prepare
+    retry: 1
+  - name: connect_qp
+  - name: barrier
+  - name: remote_read
+    len: 1
+    allow_err: true
+  - name: check_qp_status
+    status: ERR
+
+side_2:
+  - name: prepare
+  - name: connect_qp
+  - name: local_write
+    offset: 0
+    content: 'ff'
+  - name: barrier
+  - name: recv_pkt
+    cnt: 2
+    real_recv: false
+    

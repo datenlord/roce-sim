@@ -1,0 +1,39 @@
+# Responder detected an error in the sequence of OpCodes, such as a missing “Last” packet. 
+# Note: there is no PSN error, thus this does not indicate a dropped packet.
+# TODO: Add other kinds of opcode
+
+side_1:
+  - name: prepare
+    mtu: 256
+  - name: connect_qp
+  - name: barrier
+  # The RDMA WRITE operation is failed but the data `ff` that located in the first
+  # package still store into memory. Maybe this will not happen in other RDMA devices,
+  # so we should treat memory status as unknown, and can uncomment following check to
+  # have a try.
+  # - name: local_check
+  #   seg: 
+  #     - offset: 0
+  #       expected: 'ff'
+  - name: check_qp_status
+    status: ERR
+
+side_2: 
+  - name: prepare
+  - name: connect_qp
+    mtu: 256
+  - name: set_hook
+    hook_type: send
+    hook_name: sim_unexpected_opcode_hook
+  - name: local_write
+    offset: 0
+    content: 'ff'
+  - name: remote_write
+    len: 1024
+  - name: barrier
+  - name: recv_pkt
+    check_pkt:
+      - header: AETH
+        field: code
+        expect: 3
+    real_recv: false

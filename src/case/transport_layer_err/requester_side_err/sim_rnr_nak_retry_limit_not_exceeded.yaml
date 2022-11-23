@@ -1,0 +1,37 @@
+# Responder returned RNR NAK.
+# Requestor retry the request and get expected response.
+
+side_1: 
+  - name: prepare
+  - name: connect_qp
+  - name: unblock_other
+  - name: local_recv
+    offset: 0
+    len: 1
+  - name: unblock_other
+  - name: barrier
+  - name: local_check
+    seg: 
+      - offset: 0
+        expected: 'ff'
+  - name: check_qp_status
+    status: RTS
+
+side_2:
+  - name: prepare
+  - name: connect_qp
+  - name: local_write
+    offset: 0
+    content: 'ff'
+  - name: remote_send
+    len: 1
+  - name: recv_pkt
+    check_pkt:
+      - header: AETH
+        field: code
+        expect: 1
+    wait_for_retry: 2
+  - name: recv_pkt
+  - name: barrier
+  - name: check_qp_status
+    status: RTS

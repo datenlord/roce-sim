@@ -1,0 +1,31 @@
+# Responder detected a PSN larger than it expected.
+# Requester retry the request until the limit is exceeded.
+
+side_1: 
+  - name: prepare
+    sq_start_psn: 1
+  - name: connect_qp
+  - name: barrier
+  - name: remote_read
+    allow_err: true
+    len: 1
+  - name: barrier
+  - name: local_check
+    seg: 
+      - offset: 0
+        expected: '00'
+  - name: check_qp_status
+    status: ERR
+
+side_2:
+  - name: prepare
+  - name: connect_qp
+  - name: local_write
+    offset: 0
+    content: 'ff'
+  - name: barrier
+  - name: recv_pkt
+    cnt: 4
+  - name: barrier
+  - name: check_qp_status
+    status: RTS

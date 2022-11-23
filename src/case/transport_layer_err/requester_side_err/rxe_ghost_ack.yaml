@@ -1,0 +1,21 @@
+# Requester received an acknowledge message at other than the expected response PSN.
+
+side_1: 
+  - name: prepare
+    retry: 0
+  - name: connect_qp
+  - name: barrier
+  - name: remote_read
+    len: 1
+    allow_err: true
+  - name: check_qp_status
+    status: ERR
+
+side_2:
+  - name: prepare
+  - name: connect_qp
+  - name: set_hook
+    hook_type: resp
+    hook_name: ghost_ack_hook
+  - name: barrier
+  - name: recv_pkt

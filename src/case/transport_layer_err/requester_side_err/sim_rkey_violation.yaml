@@ -1,0 +1,32 @@
+# Responder detected an invalid R_Key while executing an RDMA Request
+# Requstor's RDMA operation should be failed.
+# TODO: Add other kinds of work request
+
+side_1: 
+  - name: prepare
+  - name: connect_qp
+  - name: local_write
+    offset: 0
+    content: 'ff'
+  - name: barrier
+  - name: check_qp_status
+    status: RTS
+
+side_2:
+  - name: prepare
+  - name: connect_qp
+  - name: set_hook
+    hook_type: send
+    hook_name: sim_rkey_violation_hook
+  - name: barrier
+  - name: remote_read
+    len: 1
+  - name: recv_pkt
+    check_pkt:
+      - header: AETH
+        field: code
+        expect: 3
+  - name: local_check
+    seg: 
+      - offset: 0
+        expected: '00'
