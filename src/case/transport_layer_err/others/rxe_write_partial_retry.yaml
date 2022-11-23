@@ -1,13 +1,14 @@
 side_1: 
   - name: prepare
-  - name: connect_qp
     mtu: 256
+  - name: connect_qp
   - name: barrier
   - name: barrier
   - name: local_check
     seg: 
       - offset: 0
         expected: 'ff'
+        
 side_2:
   - name: prepare
   - name: connect_qp
