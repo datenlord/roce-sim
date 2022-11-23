@@ -7,6 +7,8 @@ side_1:
   - name: barrier
   - name: remote_write
     len: 1
+  - name: check_qp_status
+    status: RTS
 
 side_2: 
   - name: prepare
@@ -17,3 +19,5 @@ side_2:
     seg: 
       - offset: 0
         expected: 'ff'
+  - name: check_qp_status
+    status: RTS

@@ -1,8 +1,8 @@
 side_1: 
   - name: prepare
-  - name: connect_qp
     mtu: 256
     min_rnr_timer: 0x1f
+  - name: connect_qp
   - name: local_write
     offset: 0
     content: 'ff'
