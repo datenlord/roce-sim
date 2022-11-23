@@ -1,0 +1,37 @@
+# Requestor detected an ACK with a PSN larger than the expected PSN for an RDMA READ or ATOMIC response. 
+# Requester retry the request until the limit is exceeded.
+# TODO: Add other kinds of work request
+
+side_1: 
+  - name: prepare
+    retry: 0
+  - name: connect_qp
+  - name: barrier
+  - name: remote_read
+    allow_err: true
+    len: 1
+  - name: local_check
+    seg: 
+      - offset: 0
+        expected: '00'
+  - name: check_qp_status
+    status: ERR
+
+side_2:
+  - name: prepare
+  - name: connect_qp
+  - name: set_hook
+    hook_type: resp
+    hook_name: implied_nak_sequence_error_retry_exceeded_hook
+  - name: local_write
+    offset: 0
+    content: 'ff'
+  - name: barrier
+  - name: recv_pkt
+    cnt: 1
+    check_pkt:
+      - header: BTH
+        field: opcode
+        expect: 12
+  - name: check_qp_status
+    status: RTS

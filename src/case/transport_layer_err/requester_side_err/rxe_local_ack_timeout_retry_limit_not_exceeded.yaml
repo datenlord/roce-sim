@@ -1,0 +1,26 @@
+# No ACK response from responder within timer interval. 
+# Requester retry the request and get expected ACK.
+
+side_1: 
+  - name: prepare
+  - name: connect_qp
+  - name: barrier
+  - name: remote_read
+    len: 1
+  - name: local_check
+    seg: 
+      - offset: 0
+        expected: 'ff'
+  - name: check_qp_status
+    status: RTS
+
+side_2:
+  - name: prepare
+  - name: connect_qp
+  - name: local_write
+    offset: 0
+    content: 'ff'
+  - name: barrier
+  - name: recv_pkt
+    real_recv: false
+  - name: recv_pkt

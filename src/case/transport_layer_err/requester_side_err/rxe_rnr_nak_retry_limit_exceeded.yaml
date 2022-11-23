@@ -1,0 +1,22 @@
+# Excessive RNR NAKs returned by the responder.
+# Requestor retry the request until the limit is exceeded.
+
+side_1:
+  - name: prepare
+    rnr_retry: 0
+  - name: connect_qp
+  - name: local_write
+    offset: 0
+    content: 'ff'
+  - name: barrier
+  - name: remote_send
+    len: 1
+    allow_err: true
+  - name: check_qp_status
+    status: ERR
+
+side_2: 
+  - name: prepare
+  - name: connect_qp
+  - name: barrier
+  - name: recv_pkt
