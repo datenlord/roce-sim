@@ -226,8 +226,6 @@ class SanitySide(SideServicer):
         return RemoteAtomicCasResponse()
 
     def RecvPkt(self, request, context):
-        pkt_check_result = True
-
         def check(ck_list, pkt):
             for ck in ck_list:
                 header = ck.get("header")
@@ -235,27 +233,23 @@ class SanitySide(SideServicer):
                 expect = ck.get("expect")
                 if not header:
                     logging.error("header should be set in recv_pkt check list")
-                    pkt_check_result = False
-                    break
+                    return False
                 if not field:
                     logging.error("field should be set in recv_pkt check list")
-                    pkt_check_result = False
-                    break
+                    return False
                 header_class = globals().get(header)
                 if not header_class:
                     logging.error(f"{header} is not a defined HEADER")
-                    pkt_check_result = False
-                    break
+                    return False
                 if not hasattr(pkt[header_class], field):
                     logging.error(f"{field} is not defined in {header} HEADER")
-                    pkt_check_result = False
-                    break
+                    return False
                 if expect != getattr(pkt[header_class], field):
                     logging.error(
                         f"{header}.{field} is {getattr(pkt[header_class], field)}, but expect {expect}"
                     )
-                    pkt_check_result = False
-                    break
+                    return False
+            return True
 
         check_fun = None
         if request.HasField("check_pkt"):
@@ -268,15 +262,15 @@ class SanitySide(SideServicer):
             else None
         )
         qp = qp_list[request.qp_id]
-        opcode = qp.rq.recv_pkts(
+        (opcode, pkt_check_result) = qp.rq.recv_pkts(
             request.cnt,
             retry_handler=retry_handler,
             check_pkt=check_fun,
             real_recv=request.real_recv,
-        )[-1]
+        )
         if request.poll_cqe:
             qp.poll_cq()
-        return RecvPktResponse(opcode=opcode, check_pass=pkt_check_result)
+        return RecvPktResponse(opcode=opcode[-1], check_pass=pkt_check_result)
 
     def ModifyQp(self, request, context):
         qp = qp_list[request.qp_id]

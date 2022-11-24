@@ -20,7 +20,7 @@ side_2:
         field: opcode
         expect: RC_RDMA_WRITE_ONLY_WITH_IMMEDIATE
     check_pkt:
-      - header: RETHImmdt
+      - header: RETHImmDt
         field: data
         expect: 0x34120000
   - name: local_check

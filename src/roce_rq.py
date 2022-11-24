@@ -913,8 +913,11 @@ class RXLogic:
                             f"expected qpn: {qpn}, received pkt's qpn: {roce_pkt[BTH].dqpn}"
                         )
                         continue
-                if check_pkt:
-                    check_pkt(roce_pkt)
+
+                pkt_check_result = True
+                if check_pkt and not check_pkt(roce_pkt):
+                    pkt_check_result = False
+
                 if real_recv:
                     opcodes.append(self.recv_q.qp.recv_pkt(roce_pkt, retry_handler))
                 else:
@@ -925,7 +928,7 @@ class RXLogic:
                     opcodes.append(roce_pkt[BTH].opcode)
                 pkt_idx += 1
             logging.debug(f"received {npkt} RoCE packets")
-            return opcodes
+            return (opcodes, pkt_check_result)
 
 
 class RQ:
