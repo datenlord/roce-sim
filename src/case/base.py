@@ -729,6 +729,12 @@ def process_command(
     return True
 
 
+CQ_POLL_TRIGGER_MAP: Final = {
+    "auto": 0,
+    "manual": 1,
+}
+
+
 def prepare(cmds, side: Side, stub: SideStub, is_py_side):
     first_cmd = cmds[0]
     if first_cmd["name"] != "prepare":
@@ -784,6 +790,10 @@ def prepare(cmds, side: Side, stub: SideStub, is_py_side):
         max_rd_atomic = qp_cmd.get("max_rd_atomic", 2)
         max_dest_rd_atomic = qp_cmd.get("max_dest_rd_atomic", 2)
         min_rnr_timer = qp_cmd.get("min_rnr_timer", 0x12)
+        cq_size = qp_cmd.get("cq_size", 128)
+        max_cqe = qp_cmd.get("max_cqe", 1)
+        cc_event_timeout = qp_cmd.get("cc_event_timeout", 100)  # time unit: ms
+        cq_poll_trigger = CQ_POLL_TRIGGER_MAP[qp_cmd.get("cq_poll_trigger", "auto")]
 
         response = stub.OpenDevice(
             message_pb2.OpenDeviceRequest(
@@ -800,6 +810,10 @@ def prepare(cmds, side: Side, stub: SideStub, is_py_side):
                 max_rd_atomic=max_rd_atomic,
                 max_dest_rd_atomic=max_dest_rd_atomic,
                 min_rnr_timer=min_rnr_timer,
+                cq_size=cq_size,
+                max_cqe=max_cqe,
+                cc_event_timeout=cc_event_timeout,
+                cq_poll_trigger=cq_poll_trigger,
             )
         )
         dev_name = response.dev_name

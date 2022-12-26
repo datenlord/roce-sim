@@ -128,7 +128,18 @@ impl Side for SideImpl {
                 .set_rq_psn(req.get_rq_start_psn())
                 .set_max_rd_atomic(req.get_max_rd_atomic().cast())
                 .set_max_dest_rd_atomic(req.get_max_dest_rd_atomic().cast())
-                .set_min_rnr_timer(req.get_min_rnr_timer().cast());
+                .set_min_rnr_timer(req.get_min_rnr_timer().cast())
+                .set_cq_size(req.get_cq_size())
+                .set_max_cqe(req.get_max_cqe().cast())
+                .set_cc_evnet_timeout(Duration::from_millis(req.get_cc_event_timeout()))
+                .set_polling_trigger(match req.get_cq_poll_trigger() {
+                    proto::message::OpenDeviceRequest_CqPollTriggerType::Auto => {
+                        async_rdma::PollingTriggerType::Automatic
+                    }
+                    proto::message::OpenDeviceRequest_CqPollTriggerType::Manual => {
+                        async_rdma::PollingTriggerType::Manual
+                    }
+                });
 
             let mut guard = unsafe { INIT_IMM_FLAG.lock() };
             let rdma = if *guard {
