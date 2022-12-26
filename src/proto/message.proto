@@ -21,6 +21,14 @@ message OpenDeviceRequest {
     uint32 max_dest_rd_atomic = 12;
     uint32 min_rnr_timer = 13;
     uint32 imm_flag = 14;
+    uint32 cq_size = 15;
+    uint32 max_cqe = 16;
+    uint64 cc_event_timeout = 17;
+    enum CqPollTriggerType {
+        Auto = 0;
+        Manual = 1;
+    }
+    CqPollTriggerType cq_poll_trigger = 18;
 }
 
 message OpenDeviceResponce {
