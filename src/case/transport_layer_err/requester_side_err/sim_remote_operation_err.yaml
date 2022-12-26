@@ -1,0 +1,34 @@
+# Responder encountered an error, (local to the responder), which prevented it from 
+# completing the request. In this test, we fill in the cq of side_1(responder) to 
+# prevent it from completing the request of side_2.
+
+side_1: 
+  - name: prepare
+    cq_size: 1
+    max_cqe: 1
+    cc_event_timeout: 10000
+    cq_poll_trigger: manual
+  - name: connect_qp
+  - name: barrier
+  - name: local_check
+    seg: 
+      - offset: 0
+        expected: '00'
+
+side_2:
+  - name: prepare
+  - name: connect_qp
+  - name: local_write
+    offset: 0
+    content: 'ff'
+  - name: remote_send
+    len: 1
+  - name: recv_pkt
+  - name: remote_send
+    len: 1
+  - name: recv_pkt
+    check_pkt:
+      - header: AETH
+        field: code
+        expect: 1
+  - name: barrier
